@@ -98,7 +98,7 @@ impl Ui {
         self.footer.set_visible(false);
     }
 
-    fn update_marks(&self) {
+    pub fn update_marks(&self) {
         let saved = self.saved.borrow();
         for (i, (mark, step)) in self.marks.iter().zip(STEPS).enumerate() {
             let skipped = saved.skipped.contains(step.id);

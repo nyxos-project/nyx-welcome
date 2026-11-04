@@ -298,6 +298,7 @@ fn finish(ui: &Rc<Ui>) {
         saved.done = true;
         saved.save();
     }
+    ui.update_marks();
     {
         let mut c = ui.choices.borrow_mut();
         c.hostname = None;
