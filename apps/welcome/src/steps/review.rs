@@ -257,9 +257,11 @@ fn failed(ui: &Rc<Ui>, progress: &Rc<Progress>, stage: &str, error: &str) {
     ui.busy.set(false);
     progress.stage.set_text(&format!("{stage} didn't work"));
     progress.bar.set_fraction(0.0);
-    let undone =
-        if stage.starts_with("Building") { " Nothing on the system changed: the previous settings were put back." } else { "" };
-    let msg = w::banner(&glib::markup_escape_text(&format!("{error}.{undone}")), true);
+    let mut text = error.trim_end_matches('.').to_string();
+    if let Some(first) = text.get(..1) {
+        text = first.to_uppercase() + &text[1..];
+    }
+    let msg = w::banner(&glib::markup_escape_text(&format!("{text}.")), true);
     progress.root.insert_child_after(&msg, Some(&progress.bar));
     let actions = w::hbox(8);
     actions.set_halign(gtk::Align::End);

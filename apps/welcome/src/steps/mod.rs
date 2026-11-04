@@ -41,15 +41,15 @@ pub const STEPS: &[Step] = &[
     step("computer", "Computer and desktop", "computer-symbolic", Kind::Computer),
     step("presets", "Starting point", "view-grid-symbolic", Kind::Presets),
     step("nyx-apps", "Nyx apps", "view-app-grid-symbolic", Kind::Software("nyx-apps")),
-    step("desktop", "Apps", "applications-other-symbolic", Kind::Software("desktop")),
+    step("desktop", "Apps", "system-software-install-symbolic", Kind::Software("desktop")),
     step("cli", "Command-line tools", "utilities-terminal-symbolic", Kind::Software("cli")),
     step("toolchains", "Development", "applications-engineering-symbolic", Kind::Software("toolchains")),
     step("infrastructure", "Containers and infrastructure", "network-server-symbolic", Kind::Software("infrastructure")),
     step("agents", "AI agents", "dialog-information-symbolic", Kind::Software("agents")),
-    step("defaults", "Default apps", "emblem-default-symbolic", Kind::Defaults),
+    step("defaults", "Default apps", "preferences-desktop-apps-symbolic", Kind::Defaults),
     step("accounts", "Accounts and sign-in", "system-users-symbolic", Kind::Accounts),
     step("care", "Updates, backup and recovery", "software-update-available-symbolic", Kind::Care),
-    Step { optional: false, ..step("review", "Review and apply", "emblem-ok-symbolic", Kind::Review) },
+    Step { optional: false, ..step("review", "Review and apply", "view-list-bullet-symbolic", Kind::Review) },
 ];
 
 pub fn build(ui: &Rc<Ui>, kind: Kind) -> gtk::Widget {
@@ -135,7 +135,11 @@ mod tests {
             }
         }
         for section in &catalog.sections {
-            assert!(STEPS.iter().any(|s| matches!(s.kind, Kind::Software(x) if x == section.id)), "no step offers {}", section.id);
+            assert!(
+                STEPS.iter().any(|s| matches!(s.kind, Kind::Software(x) if x == section.id)),
+                "no step offers {}",
+                section.id
+            );
         }
         assert_eq!(STEPS.last().map(|s| s.kind), Some(Kind::Review));
         assert!(!STEPS[0].optional && !STEPS[STEPS.len() - 1].optional);

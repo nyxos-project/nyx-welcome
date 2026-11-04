@@ -31,6 +31,7 @@ The software is the catalog Nyx Store uses (`nyx-catalog`, in
 ```sh
 nyx-welcome                 # open it
 nyx-welcome --step agents   # at a step
+nyx-welcome --select docker,zed   # with catalog items already chosen
 nyx-welcome --first-run     # open only while setup hasn't been finished
 ```
 

@@ -31,7 +31,7 @@ pub fn intro(ui: &Rc<Ui>) -> gtk::Widget {
     how.append(&w::row(
         "Together, at the end",
         "The computer's name, time zone, keyboard and software for everyone are part of the system configuration. Review shows them all, and they're applied in one go: NyxOS builds the new system first and only switches to it when it works.",
-        Some(gtk::Image::from_icon_name("emblem-synchronizing-symbolic").upcast_ref()),
+        Some(gtk::Image::from_icon_name("view-refresh-symbolic").upcast_ref()),
     ));
     how.append(&w::row(
         "Always reversible",

@@ -43,7 +43,8 @@ pub struct Ui {
     page: gtk::Box,
     scroller: gtk::ScrolledWindow,
     current: Cell<usize>,
-    furthest: Cell<usize>,
+    /// Steps left with Next.
+    completed: RefCell<BTreeSet<usize>>,
     footer: gtk::Box,
     back: gtk::Button,
     skip: gtk::Button,
@@ -64,12 +65,11 @@ impl Ui {
         }
         let i = i.min(STEPS.len() - 1);
         self.current.set(i);
-        self.furthest.set(self.furthest.get().max(i));
         if let Some(row) = self.list.row_at_index(i as i32) {
             self.list.select_row(Some(&row));
         }
         let step = &STEPS[i];
-        self.header.set_subtitle(step.title);
+        self.header.set_subtitle(if step.kind == Kind::Intro { "" } else { step.title });
         chrome::set_title(&self.window, "Welcome", step.title);
         self.rebuild();
         self.back.set_visible(i > 0);
@@ -104,7 +104,7 @@ impl Ui {
             let skipped = saved.skipped.contains(step.id);
             let (icon, visible) = if skipped {
                 ("action-unavailable-symbolic", true)
-            } else if i < self.furthest.get() || (saved.done && step.kind != Kind::Review) {
+            } else if self.completed.borrow().contains(&i) || (saved.done && step.kind != Kind::Review) {
                 ("object-select-symbolic", true)
             } else {
                 ("", false)
@@ -118,9 +118,11 @@ impl Ui {
     fn advance(self: &Rc<Self>, skipped: bool) {
         let step = &STEPS[self.current.get()];
         if skipped {
+            self.completed.borrow_mut().remove(&self.current.get());
             steps::skip(self, step.kind);
             self.saved.borrow_mut().skipped.insert(step.id.into());
         } else {
+            self.completed.borrow_mut().insert(self.current.get());
             self.saved.borrow_mut().skipped.remove(step.id);
         }
         self.saved.borrow().save();
@@ -242,7 +244,7 @@ pub fn build(app: &gtk::Application, step: Option<&str>) -> Rc<Ui> {
         page,
         scroller,
         current: Cell::new(0),
-        furthest: Cell::new(0),
+        completed: RefCell::new(BTreeSet::new()),
         footer,
         back: back.clone(),
         skip: skip.clone(),
@@ -261,9 +263,6 @@ pub fn build(app: &gtk::Application, step: Option<&str>) -> Rc<Ui> {
     keys(&ui);
 
     let start = step.and_then(|id| STEPS.iter().position(|s| s.id == id)).unwrap_or(0);
-    if ui.saved.borrow().done {
-        ui.furthest.set(STEPS.len() - 1);
-    }
     ui.show(start);
     // What's installed decides what's offered: the manager answers in the background.
     ui.refresh_installed(|ui| ui.rebuild());
