@@ -1,0 +1,12 @@
+[Unit]
+Description=Nyx Welcome at the first sign-in
+After=graphical-session.target
+PartOf=graphical-session.target
+
+[Service]
+Type=exec
+# Opens only until setup is finished once.
+ExecStart=%h/.local/bin/nyx-welcome --first-run
+
+[Install]
+WantedBy=graphical-session.target

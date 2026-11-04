@@ -1,0 +1,12 @@
+[Desktop Entry]
+Type=Application
+Name=Welcome
+GenericName=Setup
+Comment=Set up NyxOS: appearance, software, accounts and more
+Exec=nyx-welcome
+Icon=io.github.design_nexus.nyx.Welcome
+Terminal=false
+Categories=Settings;System;
+Keywords=setup;first;start;install;software;presets;theme;onboarding;
+StartupNotify=true
+StartupWMClass=io.github.design_nexus.nyx.Welcome
