@@ -14,27 +14,43 @@ pub fn presets(ui: &Rc<Ui>) -> gtk::Widget {
         "Pick any that fit: each checks a set of software in the next steps, where you can change every item. Or pick none and choose as you go.",
     ));
     let grid = gtk::FlowBox::new();
+    grid.add_css_class("welcome-presets");
     grid.set_selection_mode(gtk::SelectionMode::None);
     grid.set_homogeneous(true);
+    grid.set_min_children_per_line(2);
     grid.set_max_children_per_line(2);
     grid.set_column_spacing(12);
     grid.set_row_spacing(12);
     for p in &ui.catalog.presets {
         let card = gtk::ToggleButton::new();
         card.add_css_class("welcome-preset");
-        card.set_active(ui.choices.borrow().presets.contains(&p.id));
-        let inner = w::vbox(6);
-        inner.append(&w::label(&p.name, "welcome-preset-name"));
-        let summary = w::label(&p.summary, "welcome-lede");
+        let inner = w::vbox(4);
+        inner.set_valign(gtk::Align::Start);
+        let top = w::hbox(8);
+        let name = w::label(&p.name, "welcome-preset-name");
+        name.set_hexpand(true);
+        top.append(&name);
+        let mark = gtk::Image::from_icon_name("object-select-symbolic");
+        mark.add_css_class("welcome-preset-mark");
+        top.append(&mark);
+        inner.append(&top);
+        let summary = w::label(&p.summary, "welcome-preset-summary");
         summary.set_wrap(true);
+        summary.set_max_width_chars(34);
         inner.append(&summary);
         let names: Vec<&str> = p.items.iter().filter_map(|i| ui.catalog.item(i)).map(|i| i.name.as_str()).collect();
-        let list = w::label(&names.join(" · "), "welcome-preset-items");
+        let list = w::label(&preset_items(&names), "welcome-preset-items");
         list.set_wrap(true);
+        list.set_max_width_chars(34);
         inner.append(&list);
+        card.set_tooltip_text(Some(&names.join(", ")));
         card.set_child(Some(&inner));
+        let active = ui.choices.borrow().presets.contains(&p.id);
+        card.set_active(active);
+        mark.set_opacity(if active { 1.0 } else { 0.0 });
         let (u, id) = (ui.clone(), p.id.clone());
         card.connect_toggled(move |b| {
+            mark.set_opacity(if b.is_active() { 1.0 } else { 0.0 });
             let mut c = u.choices.borrow_mut();
             if b.is_active() {
                 c.presets.insert(id.clone());
@@ -58,6 +74,15 @@ pub fn presets(ui: &Rc<Ui>) -> gtk::Widget {
     page.upcast()
 }
 
+/// A preset's first few items and how many more, for its card.
+fn preset_items(names: &[&str]) -> String {
+    const SHOWN: usize = 4;
+    match names.len() {
+        n if n <= SHOWN => names.join(", "),
+        n => format!("{}, and {} more", names[..SHOWN].join(", "), n - SHOWN),
+    }
+}
+
 /// What an item brings with it, as tags.
 fn tags(item: &Item) -> Vec<(String, &'static str)> {
     let mut out = Vec::new();
@@ -66,6 +91,9 @@ fn tags(item: &Item) -> Vec<(String, &'static str)> {
     }
     if item.flatpak.is_some() {
         out.push(("Flathub".into(), ""));
+    }
+    if item.profile.is_some() {
+        out.push(("For you".into(), ""));
     }
     for s in &item.services {
         out.push((format!("Service: {s}"), ""));

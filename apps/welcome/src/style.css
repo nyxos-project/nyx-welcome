@@ -1,8 +1,8 @@
 /* Nyx Welcome, on the shared Design 2 sheet. */
 
 .welcome-side {
-  border-right: 1px solid @border;
-  background: @surface;
+  border-right: 1px solid @hairline;
+  background: @theme_panel;
 }
 
 .welcome-steps {
@@ -20,20 +20,20 @@
 }
 
 .welcome-step-number {
-  color: @dim_text;
+  color: @theme_dim_text;
   font-feature-settings: "tnum";
 }
 
 .welcome-steps row:selected {
-  background: alpha(@accent, 0.16);
+  background: alpha(@theme_accent, 0.16);
 }
 
 .welcome-steps row:selected .welcome-step-number {
-  color: @accent;
+  color: @theme_accent;
 }
 
 .welcome-step-mark {
-  color: @accent;
+  color: @theme_accent;
 }
 
 .welcome-page {
@@ -46,7 +46,7 @@
 }
 
 .welcome-lede {
-  color: @dim_text;
+  color: @theme_dim_text;
 }
 
 .welcome-group {
@@ -55,18 +55,18 @@
 
 .welcome-footer {
   padding: 10px 16px;
-  border-top: 1px solid @border;
+  border-top: 1px solid @hairline;
 }
 
 .welcome-error {
-  color: @danger;
+  color: @theme_danger;
   font-size: 0.9em;
   margin-left: 14px;
 }
 
 .welcome-included,
 .welcome-preset-items {
-  color: @dim_text;
+  color: @theme_dim_text;
   font-size: 0.92em;
 }
 
@@ -74,14 +74,24 @@
   padding: 4px 2px;
 }
 
-.welcome-theme {
+window.welcome-window button.welcome-theme {
   padding: 8px;
   border-radius: 12px;
   border: 2px solid transparent;
+  background: @theme_card;
+  font-weight: normal;
 }
 
-.welcome-theme.selected {
-  border-color: @accent;
+window.welcome-window button.welcome-theme:hover {
+  background: mix(@theme_card, @theme_accent, 0.05);
+}
+
+window.welcome-window button.welcome-theme.selected {
+  border-color: @theme_accent;
+}
+
+.welcome-theme-name {
+  margin: 0 2px;
 }
 
 .welcome-theme-preview {
@@ -100,20 +110,45 @@
   border-radius: 3px;
 }
 
-.welcome-preset {
-  padding: 16px;
-  border-radius: 12px;
-  border: 2px solid @border;
+.welcome-presets > flowboxchild,
+.welcome-themes > flowboxchild {
+  padding: 0;
 }
 
-.welcome-preset:checked {
-  border-color: @accent;
-  background: alpha(@accent, 0.1);
+/* Cards are buttons: these outrank the shared sheet's `window.welcome-window button`. */
+window.welcome-window button.welcome-preset {
+  padding: 14px 16px 16px;
+  border-radius: 12px;
+  border: 1px solid @hairline;
+  background: @theme_card;
+  font-weight: normal;
+}
+
+window.welcome-window button.welcome-preset:hover {
+  background: mix(@theme_card, @theme_accent, 0.05);
+}
+
+window.welcome-window button.welcome-preset:checked {
+  border-color: @theme_accent;
+  background: mix(@theme_card, @theme_accent, 0.1);
+  color: @theme_text;
 }
 
 .welcome-preset-name {
-  font-weight: 700;
-  font-size: 1.15em;
+  font-weight: 650;
+  font-size: 1.08em;
+}
+
+.welcome-preset-mark {
+  color: @theme_accent;
+}
+
+.welcome-preset-summary {
+  color: @theme_text;
+}
+
+.welcome-preset-items {
+  margin-top: 4px;
 }
 
 .welcome-stage {

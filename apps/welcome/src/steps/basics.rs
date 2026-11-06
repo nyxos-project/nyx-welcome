@@ -225,33 +225,38 @@ pub fn computer(ui: &Rc<Ui>) -> gtk::Widget {
 }
 
 pub fn defaults(_ui: &Rc<Ui>) -> gtk::Widget {
+    use nyx_ui::default_apps::{self as defaults, CATEGORIES, WEB_BROWSER};
     let page = w::vbox(18);
     page.append(&heading(
         "Default apps",
         "What opens links, mail and files. This changes right away. Apps you're installing in this setup can be chosen afterwards in Settings.",
     ));
-    let list = group("");
-    for (name, types) in live::DEFAULTS {
-        let (apps, current) = live::apps_for(types);
-        if apps.is_empty() {
-            list.append(&w::row(name, "Nothing installed opens these yet.", None));
-            continue;
+    let none = "Nothing installed opens these yet.";
+    let main = group("Defaults");
+    let row = |title: &str, desc: &str, (options, current): (Vec<(String, String)>, String), set: Box<dyn Fn(&str)>| {
+        if options.is_empty() {
+            return w::row(title, none, None);
         }
-        let names: Vec<String> = apps.iter().map(|a| a.display_name().to_string()).collect();
-        let strs: Vec<&str> = names.iter().map(String::as_str).collect();
-        let dd = gtk::DropDown::from_strings(&strs);
-        if let Some(i) = apps.iter().position(|a| a.id().map(|s| s.to_string()) == current) {
-            dd.set_selected(i as u32);
-        }
-        dd.connect_selected_notify(move |d| {
-            if let Some(app) = apps.get(d.selected() as usize) {
-                live::set_default(app, types);
-            }
-        });
-        list.append(&w::row(name, "", Some(dd.upcast_ref())));
+        w::choice_row(title, desc, options, &current, move |id| set(&id)).0
+    };
+    main.append(&row(WEB_BROWSER.title, WEB_BROWSER.desc, defaults::options(&WEB_BROWSER), Box::new(|id| {
+        let _ = defaults::set(&WEB_BROWSER, id);
+    })));
+    main.append(&row("Terminal", "Opens with Super Enter.", defaults::terminals(), Box::new(|id| {
+        let _ = defaults::set_terminal(id);
+    })));
+    main.append(&row("Text editor", "For config files and the terminal.", defaults::editors(), Box::new(|id| {
+        let _ = defaults::set_editor(id);
+    })));
+    page.append(&main);
+    let files = group("Files and links");
+    for c in CATEGORIES {
+        files.append(&row(c.title, c.desc, defaults::options(c), Box::new(move |id| {
+            let _ = defaults::set(c, id);
+        })));
     }
-    page.append(&list);
-    page.append(&settings_row("Every type", "Choose the app for any kind of file.", "Open Default Apps", "apps"));
+    page.append(&files);
+    page.append(&settings_row("More", "Every default in one place.", "Open Default Apps", "apps"));
     page.upcast()
 }
 

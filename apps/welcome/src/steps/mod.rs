@@ -44,11 +44,11 @@ pub const STEPS: &[Step] = &[
     step("desktop", "Apps", "system-software-install-symbolic", Kind::Software("desktop")),
     step("cli", "Command-line tools", "utilities-terminal-symbolic", Kind::Software("cli")),
     step("toolchains", "Development", "applications-engineering-symbolic", Kind::Software("toolchains")),
-    step("infrastructure", "Containers and infrastructure", "network-server-symbolic", Kind::Software("infrastructure")),
-    step("agents", "AI agents", "dialog-information-symbolic", Kind::Software("agents")),
+    step("infrastructure", "Infrastructure", "network-server-symbolic", Kind::Software("infrastructure")),
+    step("agents", "AI agents", "chat-message-new-symbolic", Kind::Software("agents")),
     step("defaults", "Default apps", "preferences-desktop-apps-symbolic", Kind::Defaults),
     step("accounts", "Accounts and sign-in", "system-users-symbolic", Kind::Accounts),
-    step("care", "Updates, backup and recovery", "software-update-available-symbolic", Kind::Care),
+    step("care", "Updates and recovery", "software-update-available-symbolic", Kind::Care),
     Step { optional: false, ..step("review", "Review and apply", "view-list-bullet-symbolic", Kind::Review) },
 ];
 

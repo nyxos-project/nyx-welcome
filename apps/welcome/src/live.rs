@@ -1,8 +1,6 @@
 //! What changes right away, for this user only (the theme, default apps), and what
 //! Welcome reads from the system to show.
 
-use gtk::gio;
-use gtk::prelude::*;
 use std::process::Command;
 
 /// Make `id` every Nyx app's theme, and the lock screen's when `lock` is set.
@@ -130,31 +128,6 @@ pub fn real_name(user: &str) -> String {
         })
         .filter(|n| !n.is_empty())
         .unwrap_or_else(|| user.to_string())
-}
-
-/// The kinds of default app Welcome offers: a name and the types each opens.
-pub const DEFAULTS: &[(&str, &[&str])] = &[
-    ("Web browser", &["x-scheme-handler/https", "x-scheme-handler/http", "text/html"]),
-    ("Email", &["x-scheme-handler/mailto"]),
-    ("Files", &["inode/directory"]),
-    ("Text", &["text/plain"]),
-    ("Images", &["image/png", "image/jpeg", "image/webp"]),
-    ("Music", &["audio/mpeg", "audio/flac", "audio/ogg"]),
-    ("Video", &["video/mp4", "video/x-matroska", "video/webm"]),
-    ("PDF", &["application/pdf"]),
-];
-
-/// The apps that open `types[0]`, and which is the default now.
-pub fn apps_for(types: &[&str]) -> (Vec<gio::AppInfo>, Option<String>) {
-    let apps = gio::AppInfo::all_for_type(types[0]);
-    let current = gio::AppInfo::default_for_type(types[0], false).and_then(|a| a.id()).map(|s| s.to_string());
-    (apps, current)
-}
-
-pub fn set_default(app: &gio::AppInfo, types: &[&str]) {
-    for t in types {
-        let _ = app.set_as_default_for_type(t);
-    }
 }
 
 /// System generations: how many there are, and the current one's number.

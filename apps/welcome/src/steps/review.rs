@@ -82,7 +82,8 @@ pub fn build(ui: &Rc<Ui>) -> gtk::Widget {
     let have = ui.have.borrow();
     let new_items: Vec<&nyx_catalog::Item> =
         choices.selected.iter().filter_map(|id| ui.catalog.item(id)).filter(|i| !have.has(i)).collect();
-    let everyone: Vec<&str> = new_items.iter().filter(|i| i.flatpak.is_none()).map(|i| i.name.as_str()).collect();
+    let for_you = |i: &&&nyx_catalog::Item| i.flatpak.is_some() || i.profile.is_some();
+    let everyone: Vec<&str> = new_items.iter().filter(|i| !for_you(i)).map(|i| i.name.as_str()).collect();
     if !everyone.is_empty() {
         let g = group(&format!("Software for everyone ({})", everyone.len()));
         let l = w::label(&everyone.join(", "), "welcome-list");
@@ -90,10 +91,10 @@ pub fn build(ui: &Rc<Ui>) -> gtk::Widget {
         g.append(&l);
         page.append(&g);
     }
-    let flathub: Vec<&str> = new_items.iter().filter(|i| i.flatpak.is_some()).map(|i| i.name.as_str()).collect();
-    if !flathub.is_empty() {
-        let g = group("From Flathub, for you");
-        let l = w::label(&flathub.join(", "), "welcome-list");
+    let mine: Vec<&str> = new_items.iter().filter(for_you).map(|i| i.name.as_str()).collect();
+    if !mine.is_empty() {
+        let g = group(&format!("Software for you ({})", mine.len()));
+        let l = w::label(&mine.join(", "), "welcome-list");
         l.set_wrap(true);
         g.append(&l);
         page.append(&g);
@@ -211,14 +212,17 @@ impl Progress {
 
 fn run(ui: &Rc<Ui>, changes: Vec<Change>, plan: Plan, update: bool) {
     let mut stages: Vec<(&'static str, Job)> = Vec::new();
-    if !changes.is_empty() {
-        stages.push(("Building and switching to the new system", Job::Apply(changes)));
+    match (changes.is_empty(), update) {
+        (false, true) => stages.push(("Building the new system, then updating NyxOS", Job::ApplyAndUpdate(changes))),
+        (false, false) => stages.push(("Building and switching to the new system", Job::Apply(changes))),
+        (true, true) => stages.push(("Updating NyxOS", Job::Update)),
+        (true, false) => {}
     }
     if !plan.flatpaks.is_empty() {
         stages.push(("Installing from Flathub", Job::Flatpaks(plan.flatpaks.clone())));
     }
-    if update {
-        stages.push(("Updating NyxOS", Job::Update));
+    if !plan.profiles.is_empty() {
+        stages.push(("Adding to your Nix profile", Job::Profiles(plan.profiles.clone())));
     }
     let progress = Progress::new();
     ui.take_over(&progress.root);

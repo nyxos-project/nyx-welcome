@@ -11,8 +11,12 @@ pub enum Job {
     Apply(Vec<Change>),
     /// Update NyxOS and its apps.
     Update,
+    /// Apply changes, then update, with one password.
+    ApplyAndUpdate(Vec<Change>),
     /// Install Flathub apps for the user.
     Flatpaks(Vec<String>),
+    /// Add flakes to the user's Nix profile.
+    Profiles(Vec<String>),
 }
 
 pub enum Event {
@@ -31,6 +35,14 @@ pub fn run(job: Job) -> async_channel::Receiver<Event> {
                     let _ = tx.send_blocking(Event::Line(l.to_string()));
                 })
                 .map(|_| format!("Installed {} from Flathub", apps.len()))
+                .map_err(|e| format!("{e:#}"))
+            }
+            Job::Profiles(refs) => {
+                let tx = tx.clone();
+                nyx_catalog::nix_profile(&refs, true, move |l| {
+                    let _ = tx.send_blocking(Event::Line(l.to_string()));
+                })
+                .map(|_| format!("Added {} to your Nix profile", refs.len()))
                 .map_err(|e| format!("{e:#}"))
             }
             job => match tokio::runtime::Builder::new_current_thread().enable_all().build() {
@@ -61,7 +73,11 @@ async fn manager(job: Job, tx: async_channel::Sender<Event>) -> Result<String, S
             Err(e) => return Err(e.to_string()),
         },
         Job::Update => proxy.update().await,
-        Job::Flatpaks(_) => unreachable!(),
+        Job::ApplyAndUpdate(changes) => match serde_json::to_string(&changes) {
+            Ok(json) => proxy.apply_and_update(&json).await,
+            Err(e) => return Err(e.to_string()),
+        },
+        Job::Flatpaks(_) | Job::Profiles(_) => unreachable!(),
     };
     forward.abort();
     result.map_err(|e| match e {
