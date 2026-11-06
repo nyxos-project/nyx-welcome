@@ -182,7 +182,9 @@ pub fn build(app: &gtk::Application, step: Option<&str>) -> Rc<Ui> {
         let num = w::label(&format!("{}", i + 1), "welcome-step-number");
         num.set_width_chars(2);
         row.append(&num);
-        let icon = gtk::Image::from_icon_name(step.icon);
+        // "a|b": the first of the names the icon theme has (Umbra's, then Adwaita's).
+        let names: Vec<&str> = step.icon.split('|').collect();
+        let icon = gtk::Image::from_gicon(&gtk::gio::ThemedIcon::from_names(&names));
         row.append(&icon);
         let title = w::label(step.title, "");
         title.set_hexpand(true);
