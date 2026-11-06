@@ -76,7 +76,7 @@ pub fn build(ui: &Rc<Ui>) -> gtk::Widget {
         for (k, v) in &settings_rows {
             g.append(&w::row(k, &glib::markup_escape_text(v), None));
         }
-        page.append(&g);
+        page.append(&g.root);
     }
 
     let have = ui.have.borrow();
@@ -89,7 +89,7 @@ pub fn build(ui: &Rc<Ui>) -> gtk::Widget {
         let l = w::label(&everyone.join(", "), "welcome-list");
         l.set_wrap(true);
         g.append(&l);
-        page.append(&g);
+        page.append(&g.root);
     }
     let mine: Vec<&str> = new_items.iter().filter(for_you).map(|i| i.name.as_str()).collect();
     if !mine.is_empty() {
@@ -97,13 +97,13 @@ pub fn build(ui: &Rc<Ui>) -> gtk::Widget {
         let l = w::label(&mine.join(", "), "welcome-list");
         l.set_wrap(true);
         g.append(&l);
-        page.append(&g);
+        page.append(&g.root);
     }
     drop(have);
     if choices.update_after {
         let g = group("Afterwards");
         g.append(&w::row("Update NyxOS", "The latest NyxOS, apps and packages.", None));
-        page.append(&g);
+        page.append(&g.root);
     }
 
     let nothing = plan.is_empty() && changes.is_empty() && !choices.update_after;
@@ -130,7 +130,7 @@ pub fn build(ui: &Rc<Ui>) -> gtk::Widget {
             g.append(&row);
         }
         apply.set_sensitive(false);
-        page.append(&g);
+        page.append(&g.root);
     }
 
     if nothing {
@@ -324,7 +324,7 @@ fn finish(ui: &Rc<Ui>) {
         .0,
     );
     next.append(&super::settings_row("Nyx Settings", "Every setting, in one place.", "Open Settings", "home"));
-    page.append(&next);
+    page.append(&next.root);
     let close = gtk::Button::with_label("Close");
     close.add_css_class("suggested-action");
     close.set_halign(gtk::Align::End);

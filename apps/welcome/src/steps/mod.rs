@@ -105,14 +105,28 @@ pub fn heading(title: &str, text: &str) -> gtk::Box {
     b
 }
 
-/// A group of rows under a small title.
-pub fn group(title: &str) -> gtk::Box {
-    let b = w::vbox(6);
-    b.add_css_class("welcome-group");
-    if !title.is_empty() {
-        b.append(&w::label(title, "section-title"));
+/// A group of rows in one card under a small title, as in Nyx Settings.
+pub struct Group {
+    pub root: gtk::Box,
+    list: gtk::Box,
+}
+
+impl Group {
+    pub fn append(&self, row: &impl IsA<gtk::Widget>) {
+        self.list.append(row);
     }
-    b
+}
+
+pub fn group(title: &str) -> Group {
+    let root = w::vbox(0);
+    root.add_css_class("settings-group");
+    if !title.is_empty() {
+        root.append(&w::label(&title.to_uppercase(), "group-title"));
+    }
+    let list = w::vbox(0);
+    list.add_css_class("group-list");
+    root.append(&list);
+    Group { root, list }
 }
 
 /// A row with a button that opens a page of Nyx Settings.

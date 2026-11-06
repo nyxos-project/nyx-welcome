@@ -159,7 +159,7 @@ pub fn section(ui: &Rc<Ui>, id: &str) -> gtk::Widget {
             }
             g.append(&row);
         }
-        page.append(&g);
+        page.append(&g.root);
     }
     let more = w::label("Nyx Store has the rest of nixpkgs and Flathub, any time.", "welcome-included");
     more.set_wrap(true);

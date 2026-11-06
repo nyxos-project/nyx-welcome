@@ -49,7 +49,8 @@
   color: @theme_dim_text;
 }
 
-.welcome-group {
+/* Groups as in Settings; the page's spacing already separates them. */
+.welcome-page .group-title {
   margin-top: 4px;
 }
 
@@ -71,7 +72,11 @@
 }
 
 .welcome-list {
-  padding: 4px 2px;
+  padding: 12px 14px;
+}
+
+.group-list > .welcome-error {
+  margin: 0 14px 10px;
 }
 
 window.welcome-window button.welcome-theme {

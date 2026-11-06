@@ -38,7 +38,7 @@ pub fn intro(ui: &Rc<Ui>) -> gtk::Widget {
         "Each change is a new system generation. An earlier one is in the boot menu, and in Settings.",
         Some(gtk::Image::from_icon_name("edit-undo-symbolic").upcast_ref()),
     ));
-    page.append(&how);
+    page.append(&how.root);
     page.upcast()
 }
 
@@ -130,7 +130,7 @@ pub fn appearance(ui: &Rc<Ui>) -> gtk::Widget {
         |d| live::set_density(&d),
     ));
     more.append(&settings_row("More", "Fonts, accents, icons and the wallpaper are in Settings.", "Open Settings", "theme"));
-    page.append(&more);
+    page.append(&more.root);
     page.upcast()
 }
 
@@ -195,7 +195,7 @@ pub fn computer(ui: &Rc<Ui>) -> gtk::Widget {
         }
     });
     this.append(&w::row("Keyboard", "For the desktop and the console.", Some(kb.upcast_ref())));
-    page.append(&this);
+    page.append(&this.root);
 
     let screens = group("Screens");
     let found = live::screens();
@@ -212,7 +212,7 @@ pub fn computer(ui: &Rc<Ui>) -> gtk::Widget {
         "Open Displays",
         "displays",
     ));
-    page.append(&screens);
+    page.append(&screens.root);
 
     let desk = group("Desktop");
     desk.append(&settings_row("Bar and notifications", "What the top bar shows.", "Open", "bar"));
@@ -220,7 +220,7 @@ pub fn computer(ui: &Rc<Ui>) -> gtk::Widget {
     desk.append(&settings_row("Tiling and workspaces", "How windows are arranged, and workspace rules.", "Open", "workspaces"));
     desk.append(&settings_row("Keyboard shortcuts", "Every shortcut, and your own.", "Open", "keybindings"));
     desk.append(&settings_row("Mouse and trackpad", "Speed, scrolling and gestures.", "Open", "trackpad"));
-    page.append(&desk);
+    page.append(&desk.root);
     page.upcast()
 }
 
@@ -248,14 +248,14 @@ pub fn defaults(_ui: &Rc<Ui>) -> gtk::Widget {
     main.append(&row("Text editor", "For config files and the terminal.", defaults::editors(), Box::new(|id| {
         let _ = defaults::set_editor(id);
     })));
-    page.append(&main);
+    page.append(&main.root);
     let files = group("Files and links");
     for c in CATEGORIES {
         files.append(&row(c.title, c.desc, defaults::options(c), Box::new(move |id| {
             let _ = defaults::set(c, id);
         })));
     }
-    page.append(&files);
+    page.append(&files.root);
     page.append(&settings_row("More", "Every default in one place.", "Open Default Apps", "apps"));
     page.upcast()
 }
@@ -270,7 +270,7 @@ pub fn accounts(ui: &Rc<Ui>) -> gtk::Widget {
         Some(gtk::Image::from_icon_name("avatar-default-symbolic").upcast_ref()),
     ));
     me.append(&settings_row("Your account", "Your name, picture and password.", "Open", "accounts"));
-    page.append(&me);
+    page.append(&me.root);
     let online = group("Online accounts");
     online.append(&settings_row(
         "Mail, calendars, contacts and files",
@@ -278,7 +278,7 @@ pub fn accounts(ui: &Rc<Ui>) -> gtk::Widget {
         "Add Account",
         "online-accounts",
     ));
-    page.append(&online);
+    page.append(&online.root);
     let bio = group("Biometrics");
     bio.append(&settings_row(
         "Face and fingerprint",
@@ -286,7 +286,7 @@ pub fn accounts(ui: &Rc<Ui>) -> gtk::Widget {
         "Set Up",
         "sign-in",
     ));
-    page.append(&bio);
+    page.append(&bio.root);
     page.upcast()
 }
 
@@ -313,7 +313,7 @@ pub fn care(ui: &Rc<Ui>) -> gtk::Widget {
         "Open Software",
         "software",
     ));
-    page.append(&updates);
+    page.append(&updates.root);
 
     let backup = group("Backup");
     if live::has_program("nyx-backup") {
@@ -331,7 +331,7 @@ pub fn care(ui: &Rc<Ui>) -> gtk::Widget {
     } else {
         backup.append(&w::row("Nyx Backup", "Isn't installed. Add it under Nyx apps.", None));
     }
-    page.append(&backup);
+    page.append(&backup.root);
 
     let recovery = group("Recovery");
     let (count, current) = live::generations();
@@ -348,6 +348,6 @@ pub fn care(ui: &Rc<Ui>) -> gtk::Widget {
         "Pick an earlier generation in the boot menu, or go back to the previous one in Settings → Software (or with <tt>nyx-system rollback</tt>). Your files and settings stay as they are.",
         None,
     ));
-    page.append(&recovery);
+    page.append(&recovery.root);
     page.upcast()
 }
