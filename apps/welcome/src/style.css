@@ -10,9 +10,26 @@
   padding: 10px 8px;
 }
 
-.welcome-steps row {
-  border-radius: 8px;
+/* The steps look like Settings' sidebar: dim until hovered, the current one a pill in
+ * the accent tint with a thin accent edge. */
+window.welcome-window .welcome-steps > row {
+  border-radius: var(--nyx-radius-small);
   padding: 0;
+  margin: 1px 0;
+  background: transparent;
+  color: @theme_dim_text;
+  transition: background 120ms ease-out, color 120ms ease-out;
+}
+
+window.welcome-window .welcome-steps > row:hover {
+  background: @row_hover;
+  color: @theme_text;
+}
+
+window.welcome-window .welcome-steps > row:selected {
+  background: @nav_active;
+  box-shadow: inset 2px 0 0 @theme_accent;
+  color: @theme_text;
 }
 
 .welcome-step {
@@ -20,16 +37,17 @@
 }
 
 .welcome-step-number {
-  color: @theme_dim_text;
+  color: @theme_text_tertiary;
   font-feature-settings: "tnum";
 }
 
-.welcome-steps row:selected {
-  background: alpha(@theme_accent, 0.16);
+window.welcome-window .welcome-steps > row:selected .welcome-step-number,
+window.welcome-window .welcome-steps > row:selected image {
+  color: @theme_accent;
 }
 
-.welcome-steps row:selected .welcome-step-number {
-  color: @theme_accent;
+window.welcome-window .welcome-steps > row:selected label {
+  font-weight: 500;
 }
 
 .welcome-step-mark {
