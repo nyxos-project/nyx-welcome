@@ -104,6 +104,33 @@ fn tags(item: &Item) -> Vec<(String, &'static str)> {
     out
 }
 
+fn nyx_agent(args: &[&str]) -> Option<String> {
+    let out = std::process::Command::new("nyx").arg("agent").args(args).output().ok()?;
+    out.status.success().then(|| String::from_utf8_lossy(&out.stdout).trim().to_string())
+}
+
+/// The agent `nyx agent` and Super Shift Ctrl A start, from the catalog's coding agents.
+/// It's saved at once, so an agent this setup installs can be chosen before it's there.
+fn default_agent(ui: &Rc<Ui>) -> super::Group {
+    let g = group("Default agent");
+    let mut options = vec![("none".to_string(), "None".to_string())];
+    options.extend(
+        ui.catalog.items.iter().filter(|i| i.category == "coding-agents").filter_map(|i| Some((i.bin.clone()?, i.name.clone()))),
+    );
+    let current = nyx_agent(&["default"]).filter(|c| !c.is_empty()).unwrap_or_else(|| "none".into());
+    let (row, _) = w::choice_row(
+        "Coding agent",
+        "Opens in a terminal with <tt>Super Shift Ctrl A</tt>, set to work without stopping to ask.",
+        options,
+        &current,
+        |cmd| {
+            let _ = nyx_agent(&["default", &cmd]);
+        },
+    );
+    g.append(&row);
+    g
+}
+
 pub fn section(ui: &Rc<Ui>, id: &str) -> gtk::Widget {
     let page = w::vbox(18);
     let Some(section) = ui.catalog.section(id) else { return page.upcast() };
@@ -160,6 +187,9 @@ pub fn section(ui: &Rc<Ui>, id: &str) -> gtk::Widget {
             g.append(&row);
         }
         page.append(&g.root);
+    }
+    if id == "agents" {
+        page.append(&default_agent(ui).root);
     }
     let more = w::label("Nyx Store has the rest of nixpkgs and Flathub, any time.", "welcome-included");
     more.set_wrap(true);

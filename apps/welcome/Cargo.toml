@@ -8,9 +8,9 @@ authors.workspace = true
 repository.workspace = true
 
 [dependencies]
-nyx-catalog = { git = "https://github.com/nyxos-project/nyx-system.git", rev = "f3a102109e549f3798173319d75b4b0fb058142c" }
-nyx-config = { git = "https://github.com/nyxos-project/nyx-system.git", rev = "f3a102109e549f3798173319d75b4b0fb058142c" }
-nyx-system-proto = { git = "https://github.com/nyxos-project/nyx-system.git", rev = "f3a102109e549f3798173319d75b4b0fb058142c", features = ["client"] }
+nyx-catalog = { git = "https://github.com/nyxos-project/nyx-system.git", rev = "93aae604270f5e441fbf963ff1b0e258f5d59b4a" }
+nyx-config = { git = "https://github.com/nyxos-project/nyx-system.git", rev = "93aae604270f5e441fbf963ff1b0e258f5d59b4a" }
+nyx-system-proto = { git = "https://github.com/nyxos-project/nyx-system.git", rev = "93aae604270f5e441fbf963ff1b0e258f5d59b4a", features = ["client"] }
 nyx-core = { git = "https://github.com/design-nexus/nyx-core.git", rev = "0b511a6e338f4c2c818bad6ebd351ae406578c00" }
 nyx-ui = { git = "https://github.com/design-nexus/nyx-design.git", rev = "b49ab72631cd6da8dc1bc241078200fcb7a83703" }
 nyx-theme = { git = "https://github.com/design-nexus/nyx-design.git", rev = "b49ab72631cd6da8dc1bc241078200fcb7a83703" }
