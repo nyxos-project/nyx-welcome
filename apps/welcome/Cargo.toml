@@ -12,8 +12,8 @@ nyx-catalog = { git = "https://github.com/nyxos-project/nyx-system.git", rev = "
 nyx-config = { git = "https://github.com/nyxos-project/nyx-system.git", rev = "87461e53c2fc5fb5e045204e2a492c32c86a3f26" }
 nyx-system-proto = { git = "https://github.com/nyxos-project/nyx-system.git", rev = "87461e53c2fc5fb5e045204e2a492c32c86a3f26", features = ["client"] }
 nyx-core = { git = "https://github.com/design-nexus/nyx-core.git", rev = "0b511a6e338f4c2c818bad6ebd351ae406578c00" }
-nyx-ui = { git = "https://github.com/design-nexus/nyx-design.git", rev = "b49ab72631cd6da8dc1bc241078200fcb7a83703" }
-nyx-theme = { git = "https://github.com/design-nexus/nyx-design.git", rev = "b49ab72631cd6da8dc1bc241078200fcb7a83703" }
+nyx-ui = { git = "https://github.com/design-nexus/nyx-design.git", rev = "f8eb24b88e4b4729238cfdd10472c67c33daf903" }
+nyx-theme = { git = "https://github.com/design-nexus/nyx-design.git", rev = "f8eb24b88e4b4729238cfdd10472c67c33daf903" }
 gtk = { version = "0.11", package = "gtk4", features = ["v4_18"] }
 anyhow = "1"
 async-channel = "2"
