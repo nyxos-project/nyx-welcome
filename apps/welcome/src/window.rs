@@ -159,7 +159,9 @@ pub fn build(app: &gtk::Application, step: Option<&str>) -> Rc<Ui> {
     let window =
         gtk::ApplicationWindow::builder().application(app).title("Welcome").default_width(1000).default_height(700).build();
     window.add_css_class("welcome-window");
-    window.set_size_request(720, 520);
+    // Half a 1280 px screen when tiled beside another window: narrower than the steps
+    // and a page together, so the steps go (Back, Next and the header still say where).
+    window.set_size_request(480, 480);
     let overlay = gtk::Overlay::new();
     let outer = w::vbox(0);
     outer.add_css_class("window-frame");
@@ -201,6 +203,15 @@ pub fn build(app: &gtk::Application, step: Option<&str>) -> Rc<Ui> {
     side.add_css_class("welcome-side");
     side.set_size_request(250, -1);
     body.append(&side);
+    window.connect_realize({
+        let side = side.clone();
+        move |window| {
+            if let Some(surface) = window.surface() {
+                let side = side.clone();
+                surface.connect_layout(move |_, width, _| side.set_visible(width >= 760));
+            }
+        }
+    });
 
     let main = w::vbox(0);
     main.set_hexpand(true);
