@@ -3,9 +3,12 @@
 
 use std::process::Command;
 
-/// Make `id` every Nyx app's theme, and the lock screen's when `lock` is set.
+/// Make `id` the system theme every Nyx app follows, and the lock screen's when
+/// `lock` is set.
 pub fn set_theme(id: &str, lock: bool) {
-    nyx_theme::choose_theme(nyx_theme::ThemeMode::Theme, id);
+    if let Err(e) = nyx_theme::choose_system_theme(id) {
+        eprintln!("nyx-welcome: {e}");
+    }
     if lock {
         let _ = nyx_config::Layers::standard().set(
             nyx_config::Layer::User,

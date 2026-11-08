@@ -29,12 +29,7 @@ fn build(app: &gtk::Application, step: Option<String>, select: Vec<String>) {
         no_glow_css: "",
         extra_colors: None,
         prefs,
-        set_theme: Some(|mode, theme| {
-            nyx_theme::update_suite(|s| {
-                s.mode = mode;
-                s.theme = theme;
-            })
-        }),
+        set_theme: None,
     });
     let ui = window::build(app, step.as_deref());
     ui.choices.borrow_mut().selected.extend(select.into_iter().filter(|id| ui.catalog.item(id).is_some()));

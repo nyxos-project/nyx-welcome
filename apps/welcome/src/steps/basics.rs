@@ -11,6 +11,9 @@ use std::rc::Rc;
 
 pub fn intro(ui: &Rc<Ui>) -> gtk::Widget {
     let page = w::vbox(18);
+    let logo = w::logo(72);
+    logo.set_halign(gtk::Align::Start);
+    page.append(&logo);
     let name = live::real_name(&ui.user);
     let first = name.split_whitespace().next().unwrap_or(&name).to_string();
     let again = ui.saved.borrow().done;
