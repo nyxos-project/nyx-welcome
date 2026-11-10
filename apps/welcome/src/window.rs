@@ -12,6 +12,9 @@ use std::cell::{Cell, RefCell};
 use std::collections::BTreeSet;
 use std::rc::Rc;
 
+/// Catalog items Welcome chooses for a new person to begin with.
+const PRESELECTED: &[&str] = &["nyx-notepad", "nyx-calculator", "nyx-archive", "nyx-photos"];
+
 /// What the person chose; nothing on the system changes until Review applies it, except
 /// what's live (the theme, default apps) and says so.
 #[derive(Debug, Clone, Default)]
@@ -243,13 +246,17 @@ pub fn build(app: &gtk::Application, step: Option<&str>) -> Rc<Ui> {
         Catalog::builtin().expect("the built-in catalog is valid")
     });
     let saved = Saved::load();
+    let have = Installed::probe(SystemSettings::default());
+    // The standalone Nyx apps NyxOS used to preinstall are each person's now: already
+    // chosen for whoever doesn't have them.
+    let selected = PRESELECTED.iter().filter_map(|id| catalog.item(id)).filter(|i| !have.has(i)).map(|i| i.id.clone()).collect();
     let ui = Rc::new(Ui {
         window: window.clone(),
         catalog,
-        have: RefCell::new(Installed::probe(SystemSettings::default())),
+        have: RefCell::new(have),
         manager_error: RefCell::new(None),
         user,
-        choices: RefCell::new(Choices::default()),
+        choices: RefCell::new(Choices { selected, ..Choices::default() }),
         saved: RefCell::new(saved),
         header,
         list: list.clone(),

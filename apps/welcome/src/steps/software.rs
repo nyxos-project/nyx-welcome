@@ -92,8 +92,9 @@ fn tags(item: &Item) -> Vec<(String, &'static str)> {
     if item.flatpak.is_some() {
         out.push(("Flathub".into(), ""));
     }
-    if item.profile.is_some() {
-        out.push(("For you".into(), ""));
+    match item.scope() {
+        nyx_catalog::Scope::User => out.push(("For you".into(), "")),
+        nyx_catalog::Scope::System => out.push(("For everyone".into(), "")),
     }
     for s in &item.services {
         out.push((format!("Service: {s}"), ""));

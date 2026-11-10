@@ -82,7 +82,7 @@ pub fn build(ui: &Rc<Ui>) -> gtk::Widget {
     let have = ui.have.borrow();
     let new_items: Vec<&nyx_catalog::Item> =
         choices.selected.iter().filter_map(|id| ui.catalog.item(id)).filter(|i| !have.has(i)).collect();
-    let for_you = |i: &&&nyx_catalog::Item| i.flatpak.is_some() || i.profile.is_some();
+    let for_you = |i: &&&nyx_catalog::Item| i.scope() == nyx_catalog::Scope::User;
     let everyone: Vec<&str> = new_items.iter().filter(|i| !for_you(i)).map(|i| i.name.as_str()).collect();
     if !everyone.is_empty() {
         let g = group(&format!("Software for everyone ({})", everyone.len()));
