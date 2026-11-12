@@ -1024,16 +1024,6 @@ dependencies = [
 [[package]]
 name = "nyx-config"
 version = "0.1.0"
-source = "git+https://github.com/nyxos-project/nyx-system.git?rev=8514a6d9033ff276f9b9a0b6a55dc7ff9eb72d01#8514a6d9033ff276f9b9a0b6a55dc7ff9eb72d01"
-dependencies = [
- "anyhow",
- "serde",
- "toml",
-]
-
-[[package]]
-name = "nyx-config"
-version = "0.1.0"
 source = "git+https://github.com/nyxos-project/nyx-system.git?rev=f68ecc891cd0d5a36b6ed29e93ed5ffc52e77acc#f68ecc891cd0d5a36b6ed29e93ed5ffc52e77acc"
 dependencies = [
  "anyhow",
@@ -1112,7 +1102,7 @@ name = "nyx-theme-core"
 version = "0.2.0"
 source = "git+https://github.com/design-nexus/nyx-design.git?rev=6b2550bf06ea0d8c8c7e52cff03d4236d46d9777#6b2550bf06ea0d8c8c7e52cff03d4236d46d9777"
 dependencies = [
- "nyx-config 0.1.0 (git+https://github.com/nyxos-project/nyx-system.git?rev=f68ecc891cd0d5a36b6ed29e93ed5ffc52e77acc)",
+ "nyx-config",
  "nyx-core",
  "serde",
  "serde_json",
@@ -1142,7 +1132,7 @@ dependencies = [
  "futures-util",
  "gtk4",
  "nyx-catalog",
- "nyx-config 0.1.0 (git+https://github.com/nyxos-project/nyx-system.git?rev=8514a6d9033ff276f9b9a0b6a55dc7ff9eb72d01)",
+ "nyx-config",
  "nyx-core",
  "nyx-system-proto",
  "nyx-theme",
