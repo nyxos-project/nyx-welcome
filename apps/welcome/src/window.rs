@@ -165,17 +165,9 @@ pub fn build(app: &gtk::Application, step: Option<&str>) -> Rc<Ui> {
     // Half a 1280 px screen when tiled beside another window: narrower than the steps
     // and a page together, so the steps go (Back, Next and the header still say where).
     window.set_size_request(480, 480);
-    let overlay = gtk::Overlay::new();
-    let outer = w::vbox(0);
-    outer.add_css_class("window-frame");
-    overlay.set_child(Some(&outer));
-    window.set_child(Some(&overlay));
     let header = chrome::app_header(&window, crate::APP_ID, "Welcome");
-    outer.append(&header.root);
-
-    let body = w::hbox(0);
-    body.set_vexpand(true);
-    outer.append(&body);
+    let frame = nyx_ui::frame::AppFrame::new(&header.root);
+    frame.install(&window);
 
     let list = gtk::ListBox::new();
     list.add_css_class("welcome-steps");
@@ -205,7 +197,7 @@ pub fn build(app: &gtk::Application, step: Option<&str>) -> Rc<Ui> {
     let side = gtk::ScrolledWindow::builder().hscrollbar_policy(gtk::PolicyType::Never).child(&list).build();
     side.add_css_class("welcome-side");
     side.set_size_request(250, -1);
-    body.append(&side);
+    frame.set_sidebar(&side);
     window.connect_realize({
         let side = side.clone();
         move |window| {
@@ -238,7 +230,7 @@ pub fn build(app: &gtk::Application, step: Option<&str>) -> Rc<Ui> {
     footer.append(&skip);
     footer.append(&next);
     main.append(&footer);
-    body.append(&main);
+    frame.set_page(&main);
 
     let user = std::env::var("USER").unwrap_or_default();
     let catalog = Catalog::load().unwrap_or_else(|e| {

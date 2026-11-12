@@ -1,7 +1,6 @@
 /* Nyx Welcome, on the shared Design 2 sheet. */
 
 .welcome-side {
-  border-right: 1px solid @hairline;
   background: @theme_panel;
 }
 
@@ -74,7 +73,6 @@ window.welcome-window .welcome-steps > row:selected label {
 
 .welcome-footer {
   padding: 10px 16px;
-  border-top: 1px solid @hairline;
 }
 
 .welcome-error {
