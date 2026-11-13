@@ -3,20 +3,26 @@
 NyxOS's setup after installation. It opens at the first sign-in, and is in the launcher
 afterwards to change anything again. It's separate from the installer.
 
-The steps, each but the first and last skippable:
+The steps, in four groups down the side, each but the first and last skippable:
 
-1. Welcome
-2. Appearance: the theme (for the lock screen too, and optionally the boot and sign-in
-   screens), and density
-3. Computer and desktop: name, time zone, keyboard, screens, and the desktop's pages in
-   Settings
-4. Starting point: the Everyday, Developer, AI Developer and Homelab presets, combinable
-5. Nyx apps, Apps, Command-line tools, Development, Containers and infrastructure, AI
-   agents: the NyxOS software catalog's sections
-6. Default apps
-7. Accounts and sign-in: your account, online accounts, face and fingerprint
-8. Updates, backup and recovery
-9. Review and apply
+- Make it yours
+  1. Welcome
+  2. Appearance: the theme (for the lock screen too, and optionally the boot and
+     sign-in screens), and density
+  3. Computer and desktop: name, time zone, keyboard, screens, and the desktop's pages
+     in Settings
+- Software
+  4. Starting point: the Everyday, Developer, AI Developer and Homelab presets,
+     combinable
+  5. Choose software: the NyxOS software catalog, a tab per section (Nyx apps, Apps,
+     Command-line tools, Development, Containers and infrastructure, AI agents), with
+     your picks so far beside it
+- You
+  6. Default apps
+  7. Accounts and sign-in: your account, online accounts, face and fingerprint
+- Finish
+  8. Updates, backup and recovery
+  9. Review and apply
 
 Theme, default apps and accounts change right away, for you. System settings and
 software for everyone wait for Review, which applies them in one rebuild through the
@@ -30,8 +36,10 @@ The software is the catalog Nyx Store uses (`nyx-catalog`, in
 
 ```sh
 nyx-welcome                 # open it
-nyx-welcome --step agents   # at a step
+nyx-welcome --step care     # at a step
+nyx-welcome --step agents   # at a section of the software page
 nyx-welcome --select docker,zed   # with catalog items already chosen
+nyx-welcome --preset developer,homelab   # with starting points on
 nyx-welcome --first-run     # open only while setup hasn't been finished
 ```
 

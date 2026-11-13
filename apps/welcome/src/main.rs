@@ -6,6 +6,7 @@ mod state;
 mod steps;
 mod system;
 mod window;
+mod wrap;
 
 use gtk::prelude::*;
 
@@ -16,7 +17,7 @@ fn prefs() -> nyx_theme::ThemePrefs {
     nyx_theme::ThemePrefs { mode: suite.mode, theme: suite.theme, glow: false, reduce_motion: false }
 }
 
-fn build(app: &gtk::Application, step: Option<String>, select: Vec<String>) {
+fn build(app: &gtk::Application, step: Option<String>, select: Vec<String>, presets: Vec<String>) {
     if let Some(w) = app.active_window() {
         w.present();
         return;
@@ -32,7 +33,16 @@ fn build(app: &gtk::Application, step: Option<String>, select: Vec<String>) {
         set_theme: None,
     });
     let ui = window::build(app, step.as_deref());
-    ui.choices.borrow_mut().selected.extend(select.into_iter().filter(|id| ui.catalog.item(id).is_some()));
+    {
+        let mut c = ui.choices.borrow_mut();
+        c.selected.extend(select.into_iter().filter(|id| ui.catalog.item(id).is_some()));
+        for id in presets {
+            if let Ok(items) = ui.catalog.presets(&[&id]) {
+                c.selected.extend(items);
+                c.presets.insert(id);
+            }
+        }
+    }
     ui.rebuild();
     let keep = ui.clone();
     ui.window.connect_close_request(move |_| {
@@ -47,7 +57,7 @@ fn main() -> gtk::glib::ExitCode {
     let args: Vec<String> = std::env::args().skip(1).collect();
     if args.iter().any(|a| a == "--help") {
         println!(
-            "Usage: nyx-welcome [--first-run] [--step ID] [--select ITEM,...]\n\n  --first-run  open only if setup hasn't been finished yet (the first sign-in)\n  --select     start with these catalog items chosen"
+            "Usage: nyx-welcome [--first-run] [--step ID] [--select ITEM,...] [--preset ID,...]\n\n  --first-run  open only if setup hasn't been finished yet (the first sign-in)\n  --step       open at this step, or at this section of the software page\n  --select     start with these catalog items chosen\n  --preset     start with these starting points on"
         );
         return gtk::glib::ExitCode::SUCCESS;
     }
@@ -56,12 +66,14 @@ fn main() -> gtk::glib::ExitCode {
     }
     let value = |flag: &str| args.iter().position(|a| a == flag).and_then(|i| args.get(i + 1)).cloned();
     let step = value("--step");
-    let select: Vec<String> = value("--select").map(|s| s.split(',').map(str::to_string).collect()).unwrap_or_default();
+    let list =
+        |flag: &str| -> Vec<String> { value(flag).map(|s| s.split(',').map(str::to_string).collect()).unwrap_or_default() };
+    let (select, presets) = (list("--select"), list("--preset"));
     // NYX_WELCOME_APP_ID runs a test copy under its own ID, beside the real one.
     let id = std::env::var("NYX_WELCOME_APP_ID").ok().filter(|s| !s.is_empty()).unwrap_or_else(|| APP_ID.to_string());
     gtk::glib::set_prgname(Some(id.as_str()));
     let app = gtk::Application::builder().application_id(id.as_str()).flags(gtk::gio::ApplicationFlags::NON_UNIQUE).build();
-    app.connect_activate(move |app| build(app, step.clone(), select.clone()));
+    app.connect_activate(move |app| build(app, step.clone(), select.clone(), presets.clone()));
     app.run_with_args::<&str>(&[])
 }
 

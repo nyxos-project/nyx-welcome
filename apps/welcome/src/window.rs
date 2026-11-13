@@ -1,12 +1,15 @@
-//! The window: the steps down the side, the step in the middle, and Back, Skip and
-//! Next under it. Pages are built each time they're shown, from the choices so far.
+//! The window: the steps down the side in four groups, how far along in the header,
+//! the step in the middle with Back, Skip and Next under it, and on the software page
+//! what's picked so far beside it. Pages are built each time they're shown, from the
+//! choices so far.
 
 use crate::state::Saved;
-use crate::steps::{self, Kind, STEPS};
+use crate::steps::{self, GROUPS, Kind, STEPS};
 use crate::system::{self, Event, Job};
 use gtk::{gdk, glib, prelude::*};
 use nyx_catalog::{Catalog, Installed};
 use nyx_system_proto::SystemSettings;
+use nyx_ui::sidebar::{self, NavItem, Sidebar};
 use nyx_ui::{chrome, widgets as w};
 use std::cell::{Cell, RefCell};
 use std::collections::BTreeSet;
@@ -31,6 +34,20 @@ pub struct Choices {
     pub update_after: bool,
 }
 
+/// A step in the sidebar, with its done and skipped marks.
+struct Nav {
+    item: NavItem,
+    done: gtk::Image,
+    skipped: gtk::Label,
+}
+
+/// The header's middle: the step, a bar, and "2 of 9".
+struct Progress {
+    step: gtk::Label,
+    bar: gtk::ProgressBar,
+    count: gtk::Label,
+}
+
 pub struct Ui {
     pub window: gtk::ApplicationWindow,
     pub catalog: Catalog,
@@ -40,9 +57,16 @@ pub struct Ui {
     pub user: String,
     pub choices: RefCell<Choices>,
     pub saved: RefCell<Saved>,
+    /// The software page's tab: a catalog section.
+    pub section: RefCell<String>,
+    /// Each software tab's count of picks, while the page is shown.
+    pub tab_counts: RefCell<Vec<(String, gtk::Label)>>,
     header: chrome::AppHeader,
-    list: gtk::ListBox,
-    marks: Vec<gtk::Image>,
+    sidebar: Rc<Sidebar>,
+    nav: Vec<Nav>,
+    /// The icon rail's bar where each group starts.
+    bars: Vec<gtk::Separator>,
+    progress: Progress,
     page: gtk::Box,
     scroller: gtk::ScrolledWindow,
     current: Cell<usize>,
@@ -52,6 +76,13 @@ pub struct Ui {
     back: gtk::Button,
     skip: gtk::Button,
     next: gtk::Button,
+    note: gtk::Box,
+    note_icon: gtk::Image,
+    note_text: gtk::Label,
+    /// Beside the software page: what's picked so far.
+    picks_pane: gtk::Box,
+    picks: gtk::Box,
+    width: Cell<i32>,
     /// Applying: the steps and buttons wait.
     pub busy: Cell<bool>,
 }
@@ -68,28 +99,48 @@ impl Ui {
         }
         let i = i.min(STEPS.len() - 1);
         self.current.set(i);
-        if let Some(row) = self.list.row_at_index(i as i32) {
-            self.list.select_row(Some(&row));
+        for (n, nav) in self.nav.iter().enumerate() {
+            nav.item.set_active(n == i);
         }
         let step = &STEPS[i];
-        self.header.set_subtitle(if step.kind == Kind::Intro { "" } else { step.title });
+        self.progress.step.set_text(step.title);
+        self.progress.bar.set_fraction((i + 1) as f64 / STEPS.len() as f64);
+        self.progress.count.set_text(&format!("{} of {}", i + 1, STEPS.len()));
         chrome::set_title(&self.window, "Welcome", step.title);
+        self.footer.set_visible(true);
         self.rebuild();
         self.back.set_visible(i > 0);
         self.skip.set_visible(step.optional);
         self.next.set_visible(step.kind != Kind::Review);
         self.next.set_label(if step.kind == Kind::Intro { "Get started" } else { "Next" });
-        self.footer.set_visible(true);
-        self.update_marks();
+        self.layout();
     }
 
     /// Build the current page again (after a change that shows elsewhere on it).
     pub fn rebuild(self: &Rc<Self>) {
+        self.fill_page();
+        self.scroller.vadjustment().set_value(0.0);
+    }
+
+    /// Build the current page again where it's scrolled to, once the click that asked
+    /// for it is over (it may come from a widget the rebuild replaces).
+    pub fn rebuild_keeping_place(self: &Rc<Self>) {
+        let ui = self.clone();
+        glib::idle_add_local_once(move || {
+            let value = ui.scroller.vadjustment().value();
+            ui.fill_page();
+            let adj = ui.scroller.vadjustment();
+            glib::idle_add_local_once(move || adj.set_value(value));
+        });
+    }
+
+    fn fill_page(self: &Rc<Self>) {
         while let Some(c) = self.page.first_child() {
             self.page.remove(&c);
         }
+        self.tab_counts.borrow_mut().clear();
         self.page.append(&steps::build(self, self.kind()));
-        self.scroller.vadjustment().set_value(0.0);
+        self.picks_changed();
     }
 
     /// Replace the page with `widget` (Review's progress and results) and hide the footer.
@@ -99,23 +150,79 @@ impl Ui {
         }
         self.page.append(widget);
         self.footer.set_visible(false);
+        self.layout();
+    }
+
+    /// After software was checked or unchecked: the counts, the picks beside the page,
+    /// and the footer's note.
+    pub fn picks_changed(self: &Rc<Self>) {
+        {
+            let picked = steps::picked(self);
+            for (id, label) in self.tab_counts.borrow().iter() {
+                let n = picked.iter().filter(|i| self.catalog.section_of(i).is_some_and(|s| s.id == *id)).count();
+                label.set_text(&n.to_string());
+                label.set_visible(n > 0);
+            }
+        }
+        while let Some(c) = self.picks.first_child() {
+            self.picks.remove(&c);
+        }
+        if self.kind() == Kind::Software {
+            self.picks.append(&steps::basket(self));
+        }
+        self.update_marks();
+        self.update_note();
     }
 
     pub fn update_marks(&self) {
+        let compact = self.sidebar.is_compact();
+        let picked = steps::picked(self).len() as u64;
         let saved = self.saved.borrow();
-        for (i, (mark, step)) in self.marks.iter().zip(STEPS).enumerate() {
+        for (i, (nav, step)) in self.nav.iter().zip(STEPS).enumerate() {
             let skipped = saved.skipped.contains(step.id);
-            let (icon, visible) = if skipped {
-                ("action-unavailable-symbolic", true)
-            } else if self.completed.borrow().contains(&i) || (saved.done && step.kind != Kind::Review) {
-                ("object-select-symbolic", true)
-            } else {
-                ("", false)
-            };
-            mark.set_icon_name(Some(icon));
-            mark.set_visible(visible);
-            mark.set_tooltip_text(Some(if skipped { "Skipped" } else { "Done" }));
+            let done = !skipped && (self.completed.borrow().contains(&i) || (saved.done && step.kind != Kind::Review));
+            nav.done.set_visible(done && !compact);
+            nav.skipped.set_visible(skipped && !compact);
+            nav.item.set_count((step.kind == Kind::Software && !done && !skipped).then_some(picked));
         }
+    }
+
+    fn wide(&self) -> bool {
+        let width = self.width.get();
+        let width = if width > 0 { width } else { self.window.default_width() };
+        width >= sidebar::NARROW_WIDTH
+    }
+
+    /// Fit the window's width: the picks beside the software page, the header's bar
+    /// and name, and the footer's note.
+    fn layout(&self) {
+        let wide = self.wide();
+        self.picks_pane.set_visible(wide && self.kind() == Kind::Software && self.footer.is_visible());
+        self.progress.bar.set_size_request(if wide { 160 } else { 100 }, -1);
+        if let Some(title) = find_class(self.header.root.upcast_ref(), "app-title") {
+            title.set_visible(wide);
+        }
+        self.update_note();
+    }
+
+    fn update_note(&self) {
+        let kind = self.kind();
+        let Some((icon, text)) = steps::note(kind) else {
+            self.note.set_visible(false);
+            return;
+        };
+        let text = if kind == Kind::Software && !self.wide() {
+            match steps::picked(self).len() {
+                0 => "Installed at Review".to_string(),
+                n => format!("{n} picked, installed at Review"),
+            }
+        } else {
+            text.to_string()
+        };
+        let names: Vec<&str> = icon.split('|').collect();
+        self.note_icon.set_from_gicon(&gtk::gio::ThemedIcon::from_names(&names));
+        self.note_text.set_text(&text);
+        self.note.set_visible(true);
     }
 
     fn advance(self: &Rc<Self>, skipped: bool) {
@@ -158,55 +265,97 @@ impl Ui {
     }
 }
 
+/// The first widget under `root` with CSS class `class`.
+fn find_class(root: &gtk::Widget, class: &str) -> Option<gtk::Widget> {
+    if root.has_css_class(class) {
+        return Some(root.clone());
+    }
+    let mut child = root.first_child();
+    while let Some(c) = child {
+        if let Some(found) = find_class(&c, class) {
+            return Some(found);
+        }
+        child = c.next_sibling();
+    }
+    None
+}
+
+/// The steps under their groups' headings, and the rail's bar for each group.
+fn steps_sidebar(sidebar: &Sidebar) -> (Vec<Nav>, Vec<gtk::Separator>) {
+    let (mut nav, mut bars) = (Vec::new(), Vec::new());
+    for (i, step) in STEPS.iter().enumerate() {
+        if i == 0 || STEPS[i - 1].group != step.group {
+            let (title, section) = GROUPS[step.group];
+            let bar = gtk::Separator::new(gtk::Orientation::Horizontal);
+            bar.add_css_class("nav-divider");
+            bar.add_css_class("compact-show");
+            bar.add_css_class(&format!("section-{section}"));
+            bar.set_visible(false);
+            sidebar.append(&bar);
+            bars.push(bar);
+            let heading = sidebar::group_label(title, i == 0);
+            sidebar::set_section(&heading, section);
+            sidebar.append(&heading);
+        }
+        let item = sidebar::nav_item("", step.title, step.title);
+        let content = item.button.child().and_downcast::<gtk::Box>().expect("a nav item holds a box");
+        if let Some(image) = content.first_child().and_downcast::<gtk::Image>() {
+            let names: Vec<&str> = step.icon.split('|').collect();
+            image.set_from_gicon(&gtk::gio::ThemedIcon::from_names(&names));
+        }
+        let done = gtk::Image::from_icon_name("object-select-symbolic");
+        done.add_css_class("welcome-done");
+        done.set_tooltip_text(Some("Done"));
+        done.set_visible(false);
+        content.append(&done);
+        let skipped = w::label("Skipped", "nav-sub");
+        skipped.set_visible(false);
+        content.append(&skipped);
+        sidebar.append(&item.button);
+        nav.push(Nav { item, done, skipped });
+    }
+    let foot = w::hbox(8);
+    foot.add_css_class("welcome-side-foot");
+    foot.add_css_class("compact-hide");
+    let icon = gtk::Image::from_icon_name("dialog-information-symbolic");
+    icon.set_valign(gtk::Align::Start);
+    foot.append(&icon);
+    let text = w::label("Nothing for everyone changes until Review", "");
+    text.set_wrap(true);
+    text.set_hexpand(true);
+    foot.append(&text);
+    sidebar.append_foot(&foot);
+    (nav, bars)
+}
+
 pub fn build(app: &gtk::Application, step: Option<&str>) -> Rc<Ui> {
     let window =
         gtk::ApplicationWindow::builder().application(app).title("Welcome").default_width(1000).default_height(700).build();
     window.add_css_class("welcome-window");
-    // Half a 1280 px screen when tiled beside another window: narrower than the steps
-    // and a page together, so the steps go (Back, Next and the header still say where).
     window.set_size_request(480, 480);
     let header = chrome::app_header(&window, crate::APP_ID, "Welcome");
+    let toggle = w::bar_button("sidebar-show-symbolic", "Collapse the sidebar (Ctrl+B)");
+    header.start.append(&toggle);
+    header.center.set_spacing(10);
+    let progress = Progress {
+        step: w::label("", "welcome-progress-step"),
+        bar: gtk::ProgressBar::new(),
+        count: w::label("", "welcome-progress-count"),
+    };
+    progress.bar.add_css_class("welcome-progress");
+    progress.bar.set_valign(gtk::Align::Center);
+    header.center.append(&progress.step);
+    header.center.append(&progress.bar);
+    header.center.append(&progress.count);
     let frame = nyx_ui::frame::AppFrame::new(&header.root);
     frame.install(&window);
+    frame.set_flush(true);
 
-    let list = gtk::ListBox::new();
-    list.add_css_class("welcome-steps");
-    list.set_selection_mode(gtk::SelectionMode::Single);
-    let mut marks = Vec::new();
-    for (i, step) in STEPS.iter().enumerate() {
-        let row = w::hbox(10);
-        row.add_css_class("welcome-step");
-        let num = w::label(&format!("{}", i + 1), "welcome-step-number");
-        num.set_width_chars(2);
-        row.append(&num);
-        // "a|b": the first of the names the icon theme has (Umbra's, then Adwaita's).
-        let names: Vec<&str> = step.icon.split('|').collect();
-        let icon = gtk::Image::from_gicon(&gtk::gio::ThemedIcon::from_names(&names));
-        row.append(&icon);
-        let title = w::label(step.title, "");
-        title.set_hexpand(true);
-        title.set_ellipsize(gtk::pango::EllipsizeMode::End);
-        row.append(&title);
-        let mark = gtk::Image::new();
-        mark.add_css_class("welcome-step-mark");
-        mark.set_visible(false);
-        row.append(&mark);
-        marks.push(mark);
-        list.append(&row);
-    }
-    let side = gtk::ScrolledWindow::builder().hscrollbar_policy(gtk::PolicyType::Never).child(&list).build();
-    side.add_css_class("welcome-side");
-    side.set_size_request(250, -1);
-    frame.set_sidebar(&side);
-    window.connect_realize({
-        let side = side.clone();
-        move |window| {
-            if let Some(surface) = window.surface() {
-                let side = side.clone();
-                surface.connect_layout(move |_, width, _| side.set_visible(width >= 760));
-            }
-        }
-    });
+    let sidebar = Sidebar::new();
+    sidebar.root.add_css_class("welcome-side");
+    let (nav, bars) = steps_sidebar(&sidebar);
+    sidebar.follow_window(&window);
+    frame.set_sidebar(&sidebar.root);
 
     let main = w::vbox(0);
     main.set_hexpand(true);
@@ -218,19 +367,44 @@ pub fn build(app: &gtk::Application, step: Option<&str>) -> Rc<Ui> {
 
     let footer = w::hbox(8);
     footer.add_css_class("welcome-footer");
-    let back = gtk::Button::with_label("Back");
+    let back = gtk::Button::new();
+    back.add_css_class("flat");
+    back.add_css_class("welcome-back");
+    let back_inner = w::hbox(6);
+    back_inner.append(&gtk::Image::from_icon_name("go-previous-symbolic"));
+    back_inner.append(&gtk::Label::new(Some("Back")));
+    back.set_child(Some(&back_inner));
     let spacer = gtk::Box::new(gtk::Orientation::Horizontal, 0);
     spacer.set_hexpand(true);
+    let note = w::hbox(6);
+    note.add_css_class("welcome-note");
+    let note_icon = gtk::Image::new();
+    let note_text = w::label("", "");
+    note_text.set_ellipsize(gtk::pango::EllipsizeMode::End);
+    note.append(&note_icon);
+    note.append(&note_text);
     let skip = gtk::Button::with_label("Skip");
     skip.set_tooltip_text(Some("Leave this step out: nothing from it is applied"));
     let next = gtk::Button::with_label("Next");
     next.add_css_class("suggested-action");
-    footer.append(&back);
-    footer.append(&spacer);
-    footer.append(&skip);
-    footer.append(&next);
+    for b in [back.upcast_ref::<gtk::Widget>(), spacer.upcast_ref(), note.upcast_ref(), skip.upcast_ref(), next.upcast_ref()] {
+        b.set_valign(gtk::Align::Center);
+        footer.append(b);
+    }
     main.append(&footer);
-    frame.set_page(&main);
+
+    let picks = w::vbox(0);
+    let picks_scroller = gtk::ScrolledWindow::builder().hscrollbar_policy(gtk::PolicyType::Never).child(&picks).build();
+    picks_scroller.set_size_request(260, -1);
+    let picks_pane = w::hbox(0);
+    picks_pane.add_css_class("welcome-picks-pane");
+    picks_pane.append(&nyx_ui::frame::pane_line(gtk::Orientation::Vertical));
+    picks_pane.append(&picks_scroller);
+    picks_pane.set_visible(false);
+    let cols = w::hbox(0);
+    cols.append(&main);
+    cols.append(&picks_pane);
+    frame.set_page(&cols);
 
     let user = std::env::var("USER").unwrap_or_default();
     let catalog = Catalog::load().unwrap_or_else(|e| {
@@ -242,6 +416,12 @@ pub fn build(app: &gtk::Application, step: Option<&str>) -> Rc<Ui> {
     // The standalone Nyx apps NyxOS used to preinstall are each person's now: already
     // chosen for whoever doesn't have them.
     let selected = PRESELECTED.iter().filter_map(|id| catalog.item(id)).filter(|i| !have.has(i)).map(|i| i.id.clone()).collect();
+    let start = step.and_then(|id| steps::find(&catalog, id));
+    let section = start
+        .as_ref()
+        .and_then(|(_, s)| s.clone())
+        .or_else(|| catalog.sections.first().map(|s| s.id.clone()))
+        .unwrap_or_default();
     let ui = Rc::new(Ui {
         window: window.clone(),
         catalog,
@@ -250,9 +430,13 @@ pub fn build(app: &gtk::Application, step: Option<&str>) -> Rc<Ui> {
         user,
         choices: RefCell::new(Choices { selected, ..Choices::default() }),
         saved: RefCell::new(saved),
+        section: RefCell::new(section),
+        tab_counts: RefCell::default(),
         header,
-        list: list.clone(),
-        marks,
+        sidebar: sidebar.clone(),
+        nav,
+        bars,
+        progress,
         page,
         scroller,
         current: Cell::new(0),
@@ -261,11 +445,40 @@ pub fn build(app: &gtk::Application, step: Option<&str>) -> Rc<Ui> {
         back: back.clone(),
         skip: skip.clone(),
         next: next.clone(),
+        note,
+        note_icon,
+        note_text,
+        picks_pane,
+        picks,
+        width: Cell::new(0),
         busy: Cell::new(false),
     });
 
-    let u = ui.clone();
-    list.connect_row_activated(move |_, row| u.show(row.index() as usize));
+    for (i, nav) in ui.nav.iter().enumerate() {
+        let u = ui.clone();
+        nav.item.button.connect_clicked(move |_| u.show(i));
+    }
+    let weak = Rc::downgrade(&ui);
+    sidebar.connect_compact(move |compact| {
+        if let Some(ui) = weak.upgrade() {
+            for bar in &ui.bars {
+                bar.set_visible(compact);
+            }
+            ui.update_marks();
+        }
+    });
+    let s = sidebar.clone();
+    toggle.connect_clicked(move |_| s.toggle());
+    let weak = Rc::downgrade(&ui);
+    window.add_tick_callback(move |w, _| {
+        if let Some(ui) = weak.upgrade()
+            && w.width() != ui.width.get()
+        {
+            ui.width.set(w.width());
+            ui.layout();
+        }
+        glib::ControlFlow::Continue
+    });
     let u = ui.clone();
     back.connect_clicked(move |_| u.show(u.current.get().saturating_sub(1)));
     let u = ui.clone();
@@ -274,8 +487,7 @@ pub fn build(app: &gtk::Application, step: Option<&str>) -> Rc<Ui> {
     next.connect_clicked(move |_| u.advance(false));
     keys(&ui);
 
-    let start = step.and_then(|id| STEPS.iter().position(|s| s.id == id)).unwrap_or(0);
-    ui.show(start);
+    ui.show(start.map(|(i, _)| i).unwrap_or(0));
     // What's installed decides what's offered: the manager answers in the background.
     ui.refresh_installed(|ui| ui.rebuild());
     ui
@@ -287,9 +499,11 @@ fn keys(ui: &Rc<Ui>) {
     let u = ui.clone();
     keys.connect_key_pressed(move |_, k, _, mods| {
         let alt = mods.contains(gdk::ModifierType::ALT_MASK);
+        let ctrl = mods.contains(gdk::ModifierType::CONTROL_MASK);
         match k {
             gdk::Key::Left if alt => u.show(u.current.get().saturating_sub(1)),
             gdk::Key::Right if alt && u.kind() != Kind::Review => u.advance(false),
+            gdk::Key::b | gdk::Key::B if ctrl => u.sidebar.toggle(),
             _ => return glib::Propagation::Proceed,
         }
         glib::Propagation::Stop

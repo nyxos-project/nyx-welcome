@@ -57,23 +57,26 @@ pub fn appearance(ui: &Rc<Ui>) -> gtk::Widget {
     grid.set_homogeneous(true);
     grid.set_max_children_per_line(4);
     grid.set_min_children_per_line(2);
-    grid.set_column_spacing(10);
-    grid.set_row_spacing(10);
+    grid.set_column_spacing(12);
+    grid.set_row_spacing(14);
     for theme in nyx_theme::all() {
         let card = gtk::Button::new();
         card.add_css_class("welcome-theme");
-        if theme.id == current {
+        let selected = theme.id == current;
+        if selected {
             card.add_css_class("selected");
         }
         let inner = w::vbox(8);
+        // A window of the theme: its surface inset from the top left, two lines of
+        // text and an accent button.
         let preview = w::hbox(0);
         preview.add_css_class("welcome-theme-preview");
         w::paint(&preview, &theme.palette.bg);
-        let surface = w::vbox(4);
+        let surface = w::vbox(7);
         surface.add_css_class("welcome-theme-surface");
         w::paint(&surface, &theme.palette.surface);
         surface.set_hexpand(true);
-        for (colour, width) in [(&theme.palette.text, 60), (&theme.palette.dim_text, 40)] {
+        for (colour, width) in [(&theme.palette.text, 90), (&theme.palette.dim_text, 58)] {
             let line = gtk::Box::new(gtk::Orientation::Horizontal, 0);
             line.add_css_class("welcome-theme-line");
             line.set_size_request(width, 6);
@@ -83,13 +86,22 @@ pub fn appearance(ui: &Rc<Ui>) -> gtk::Widget {
         }
         let accent = gtk::Box::new(gtk::Orientation::Horizontal, 0);
         accent.add_css_class("welcome-theme-accent");
-        accent.set_size_request(28, 10);
+        accent.set_size_request(30, 10);
         accent.set_halign(gtk::Align::Start);
+        accent.set_valign(gtk::Align::End);
+        accent.set_vexpand(true);
         w::paint(&accent, &theme.palette.accent);
         surface.append(&accent);
         preview.append(&surface);
         inner.append(&preview);
-        inner.append(&w::label(&theme.name, "welcome-theme-name"));
+        let name = w::hbox(6);
+        name.append(&w::label(&theme.name, "welcome-theme-name"));
+        if selected {
+            let check = super::icon("emblem-default-symbolic|object-select-symbolic");
+            check.add_css_class("welcome-theme-check");
+            name.append(&check);
+        }
+        inner.append(&name);
         card.set_child(Some(&inner));
         let (u, id, lock) = (ui.clone(), theme.id.clone(), lock.clone());
         card.connect_clicked(move |_| {
@@ -107,18 +119,13 @@ pub fn appearance(ui: &Rc<Ui>) -> gtk::Widget {
 
     let more = group("");
     let l = lock.clone();
-    more.append(
-        &w::switch_row("Use it for the lock screen too", "The lock screen shows the theme you pick here.", true, move |on| {
-            l.set(on)
-        })
-        .0,
-    );
+    more.append(&w::switch_row("Use it for the lock screen too", "", true, move |on| l.set(on)).0);
     let u = ui.clone();
     let chosen = current.clone();
     more.append(
         &w::switch_row(
             "Use it for the boot and sign-in screens",
-            "For everyone on this computer. A system setting: applied with the rest at the end.",
+            "For everyone on this computer: applied with the rest at Review.",
             ui.choices.borrow().screens_theme.is_some(),
             move |on| u.choices.borrow_mut().screens_theme = on.then(|| chosen.clone()),
         )
@@ -132,7 +139,13 @@ pub fn appearance(ui: &Rc<Ui>) -> gtk::Widget {
         &density,
         |d| live::set_density(&d),
     ));
-    more.append(&settings_row("More", "Fonts, accents, icons and the wallpaper are in Settings.", "Open Settings", "theme"));
+    let open = gtk::Button::new();
+    let inner = w::hbox(6);
+    inner.append(&super::icon("adw-external-link-symbolic|send-to-symbolic"));
+    inner.append(&gtk::Label::new(Some("Open Settings")));
+    open.set_child(Some(&inner));
+    open.connect_clicked(|_| live::open_settings("theme"));
+    more.append(&w::row("Fonts, accents, icons and the wallpaper", "", Some(open.upcast_ref())));
     page.append(&more.root);
     page.upcast()
 }
@@ -242,21 +255,41 @@ pub fn defaults(_ui: &Rc<Ui>) -> gtk::Widget {
         }
         w::choice_row(title, desc, options, &current, move |id| set(&id)).0
     };
-    main.append(&row(WEB_BROWSER.title, WEB_BROWSER.desc, defaults::options(&WEB_BROWSER), Box::new(|id| {
-        let _ = defaults::set(&WEB_BROWSER, id);
-    })));
-    main.append(&row("Terminal", "Opens with Super Enter.", defaults::terminals(), Box::new(|id| {
-        let _ = defaults::set_terminal(id);
-    })));
-    main.append(&row("Text editor", "For config files and the terminal.", defaults::editors(), Box::new(|id| {
-        let _ = defaults::set_editor(id);
-    })));
+    main.append(&row(
+        WEB_BROWSER.title,
+        WEB_BROWSER.desc,
+        defaults::options(&WEB_BROWSER),
+        Box::new(|id| {
+            let _ = defaults::set(&WEB_BROWSER, id);
+        }),
+    ));
+    main.append(&row(
+        "Terminal",
+        "Opens with Super Enter.",
+        defaults::terminals(),
+        Box::new(|id| {
+            let _ = defaults::set_terminal(id);
+        }),
+    ));
+    main.append(&row(
+        "Text editor",
+        "For config files and the terminal.",
+        defaults::editors(),
+        Box::new(|id| {
+            let _ = defaults::set_editor(id);
+        }),
+    ));
     page.append(&main.root);
     let files = group("Files and links");
     for c in CATEGORIES {
-        files.append(&row(c.title, c.desc, defaults::options(c), Box::new(move |id| {
-            let _ = defaults::set(c, id);
-        })));
+        files.append(&row(
+            c.title,
+            c.desc,
+            defaults::options(c),
+            Box::new(move |id| {
+                let _ = defaults::set(c, id);
+            }),
+        ));
     }
     page.append(&files.root);
     page.append(&settings_row("More", "Every default in one place.", "Open Default Apps", "apps"));
