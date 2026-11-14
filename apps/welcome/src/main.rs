@@ -45,9 +45,26 @@ fn build(app: &gtk::Application, step: Option<String>, select: Vec<String>, pres
     }
     ui.rebuild();
     let keep = ui.clone();
-    ui.window.connect_close_request(move |_| {
-        let _ = &keep;
-        gtk::glib::Propagation::Proceed
+    ui.window.connect_close_request(move |window| {
+        if !keep.busy.get() {
+            return gtk::glib::Propagation::Proceed;
+        }
+        // Closing now would drop the app installs that haven't started.
+        let dialog = gtk::AlertDialog::builder()
+            .modal(true)
+            .message("Welcome is still setting up")
+            .detail("Closing now stops the app installs that haven't started yet. Changes to the system already underway finish on their own.")
+            .buttons(["Keep going", "Close anyway"])
+            .cancel_button(0)
+            .default_button(0)
+            .build();
+        let w = window.clone();
+        dialog.choose(Some(window), gtk::gio::Cancellable::NONE, move |answer| {
+            if answer == Ok(1) {
+                w.destroy();
+            }
+        });
+        gtk::glib::Propagation::Stop
     });
     ui.window.present();
 }
@@ -72,7 +89,9 @@ fn main() -> gtk::glib::ExitCode {
     // NYX_WELCOME_APP_ID runs a test copy under its own ID, beside the real one.
     let id = std::env::var("NYX_WELCOME_APP_ID").ok().filter(|s| !s.is_empty()).unwrap_or_else(|| APP_ID.to_string());
     gtk::glib::set_prgname(Some(id.as_str()));
-    let app = gtk::Application::builder().application_id(id.as_str()).flags(gtk::gio::ApplicationFlags::NON_UNIQUE).build();
+    // One Welcome: opening it again (the launcher while the first-run window is up)
+    // brings the open one forward.
+    let app = gtk::Application::builder().application_id(id.as_str()).build();
     app.connect_activate(move |app| build(app, step.clone(), select.clone(), presets.clone()));
     app.run_with_args::<&str>(&[])
 }
