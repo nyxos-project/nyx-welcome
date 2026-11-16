@@ -117,6 +117,15 @@ impl Ui {
     }
 
     /// Build the current page again (after a change that shows elsewhere on it).
+    /// Move to the step (or the software page's section) `id` names, as `--step` does at start.
+    pub fn go_to(self: &Rc<Self>, id: &str) {
+        let Some((i, section)) = steps::find(&self.catalog, id) else { return };
+        if let Some(section) = section {
+            *self.section.borrow_mut() = section;
+        }
+        self.show(i);
+    }
+
     pub fn rebuild(self: &Rc<Self>) {
         self.fill_page();
         self.scroller.vadjustment().set_value(0.0);

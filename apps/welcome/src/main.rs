@@ -17,11 +17,57 @@ fn prefs() -> nyx_theme::ThemePrefs {
     nyx_theme::ThemePrefs { mode: suite.mode, theme: suite.theme, glow: false, reduce_motion: false }
 }
 
-fn build(app: &gtk::Application, step: Option<String>, select: Vec<String>, presets: Vec<String>) {
-    if let Some(w) = app.active_window() {
-        w.present();
+thread_local! {
+    static UI: std::cell::RefCell<Option<std::rc::Rc<window::Ui>>> = const { std::cell::RefCell::new(None) };
+}
+
+/// What a launch asks for: `--step`, `--select`, `--preset`.
+struct Request {
+    step: Option<String>,
+    select: Vec<String>,
+    presets: Vec<String>,
+}
+
+fn request(args: &[String]) -> Request {
+    let value = |flag: &str| args.iter().position(|a| a == flag).and_then(|i| args.get(i + 1)).cloned();
+    let list =
+        |flag: &str| -> Vec<String> { value(flag).map(|s| s.split(',').map(str::to_string).collect()).unwrap_or_default() };
+    Request { step: value("--step"), select: list("--select"), presets: list("--preset") }
+}
+
+/// Add `select` and `presets` to the choices.
+fn choose(ui: &window::Ui, select: Vec<String>, presets: Vec<String>) {
+    let mut c = ui.choices.borrow_mut();
+    c.selected.extend(select.into_iter().filter(|id| ui.catalog.item(id).is_some()));
+    for id in presets {
+        if let Ok(items) = ui.catalog.presets(&[&id]) {
+            c.selected.extend(items);
+            c.presets.insert(id);
+        }
+    }
+}
+
+/// Open Welcome as `r` asks, or move the open one there (Settings' and the Store's buttons
+/// open it at a step while it may already be up).
+fn open(app: &gtk::Application, r: Request) {
+    if let Some(ui) = UI.with(|u| u.borrow().clone())
+        && app.active_window().is_some()
+    {
+        let asked = r.step.is_some() || !r.select.is_empty() || !r.presets.is_empty();
+        if asked && !ui.busy.get() {
+            choose(&ui, r.select, r.presets);
+            ui.rebuild();
+            if let Some(step) = &r.step {
+                ui.go_to(step);
+            }
+        }
+        ui.window.present();
         return;
     }
+    build(app, r.step, r.select, r.presets);
+}
+
+fn build(app: &gtk::Application, step: Option<String>, select: Vec<String>, presets: Vec<String>) {
     nyx_theme::use_design_2();
     nyx_theme::install(nyx_theme::Style {
         window_class: "welcome-window",
@@ -33,17 +79,9 @@ fn build(app: &gtk::Application, step: Option<String>, select: Vec<String>, pres
         set_theme: None,
     });
     let ui = window::build(app, step.as_deref());
-    {
-        let mut c = ui.choices.borrow_mut();
-        c.selected.extend(select.into_iter().filter(|id| ui.catalog.item(id).is_some()));
-        for id in presets {
-            if let Ok(items) = ui.catalog.presets(&[&id]) {
-                c.selected.extend(items);
-                c.presets.insert(id);
-            }
-        }
-    }
+    choose(&ui, select, presets);
     ui.rebuild();
+    UI.with(|u| *u.borrow_mut() = Some(ui.clone()));
     let keep = ui.clone();
     ui.window.connect_close_request(move |window| {
         if !keep.busy.get() {
@@ -81,19 +119,22 @@ fn main() -> gtk::glib::ExitCode {
     if args.iter().any(|a| a == "--first-run") && state::Saved::load().done {
         return gtk::glib::ExitCode::SUCCESS;
     }
-    let value = |flag: &str| args.iter().position(|a| a == flag).and_then(|i| args.get(i + 1)).cloned();
-    let step = value("--step");
-    let list =
-        |flag: &str| -> Vec<String> { value(flag).map(|s| s.split(',').map(str::to_string).collect()).unwrap_or_default() };
-    let (select, presets) = (list("--select"), list("--preset"));
     // NYX_WELCOME_APP_ID runs a test copy under its own ID, beside the real one.
     let id = std::env::var("NYX_WELCOME_APP_ID").ok().filter(|s| !s.is_empty()).unwrap_or_else(|| APP_ID.to_string());
     gtk::glib::set_prgname(Some(id.as_str()));
     // One Welcome: opening it again (the launcher while the first-run window is up)
-    // brings the open one forward.
-    let app = gtk::Application::builder().application_id(id.as_str()).build();
-    app.connect_activate(move |app| build(app, step.clone(), select.clone(), presets.clone()));
-    app.run_with_args::<&str>(&[])
+    // brings the open one forward, and a step or choices given move it there.
+    let app = gtk::Application::builder()
+        .application_id(id.as_str())
+        .flags(gtk::gio::ApplicationFlags::HANDLES_COMMAND_LINE)
+        .build();
+    app.connect_activate(|app| open(app, request(&[])));
+    app.connect_command_line(|app, cmd| {
+        let args: Vec<String> = cmd.arguments().iter().skip(1).map(|a| a.to_string_lossy().into_owned()).collect();
+        open(app, request(&args));
+        gtk::glib::ExitCode::SUCCESS
+    });
+    app.run()
 }
 
 #[cfg(test)]
