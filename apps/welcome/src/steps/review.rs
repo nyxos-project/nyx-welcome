@@ -210,7 +210,9 @@ impl Progress {
     }
 }
 
-fn run(ui: &Rc<Ui>, changes: Vec<Change>, plan: Plan, update: bool) {
+/// What setting up takes, in order: the system's changes in one rebuild (with the update
+/// when asked for, under one password), then Flathub, then the Nix profile.
+fn stages(changes: Vec<Change>, plan: &Plan, update: bool) -> Vec<(&'static str, Job)> {
     let mut stages: Vec<(&'static str, Job)> = Vec::new();
     match (changes.is_empty(), update) {
         (false, true) => stages.push(("Building the new system, then updating NyxOS", Job::ApplyAndUpdate(changes))),
@@ -224,33 +226,76 @@ fn run(ui: &Rc<Ui>, changes: Vec<Change>, plan: Plan, update: bool) {
     if !plan.profiles.is_empty() {
         stages.push(("Adding to your Nix profile", Job::Profiles(plan.profiles.clone())));
     }
+    stages
+}
+
+/// What a stage reports while running.
+enum Report<'a> {
+    Stage(&'static str),
+    Line(&'a str),
+}
+
+/// Run `stages` one after another with `exec`; stop at the first that fails, saying which.
+async fn run_stages(
+    stages: Vec<(&'static str, Job)>,
+    exec: impl Fn(Job) -> async_channel::Receiver<Event>,
+    report: impl Fn(Report),
+) -> Result<(), (&'static str, String)> {
+    for (label, job) in stages {
+        report(Report::Stage(label));
+        let rx = exec(job);
+        let mut outcome = Err("it stopped without saying why".to_string());
+        while let Ok(ev) = rx.recv().await {
+            match ev {
+                Event::Line(l) => report(Report::Line(&l)),
+                Event::Done(r) => {
+                    outcome = r;
+                    break;
+                }
+            }
+        }
+        match outcome {
+            Ok(summary) => report(Report::Line(&summary)),
+            Err(e) => return Err((label, e)),
+        }
+    }
+    Ok(())
+}
+
+/// What's left to do: the system settings chosen and the catalog's plan for the
+/// selection against what's installed now, so a retry skips what already worked.
+fn remaining(
+    choices: &Choices,
+    catalog: &nyx_catalog::Catalog,
+    user: &str,
+    have: &nyx_catalog::Installed,
+) -> anyhow::Result<(Vec<Change>, Plan)> {
+    let plan = catalog.plan(&choices.selected, user, have)?;
+    let mut changes = system_changes(choices);
+    changes.extend(plan.changes.iter().cloned());
+    Ok((changes, plan))
+}
+
+fn run(ui: &Rc<Ui>, changes: Vec<Change>, plan: Plan, update: bool) {
+    let stages = stages(changes, &plan, update);
     let progress = Progress::new();
     ui.take_over(&progress.root);
     ui.busy.set(true);
     let ui = ui.clone();
     glib::spawn_future_local(async move {
-        for (label, job) in stages {
-            progress.stage.set_text(label);
-            progress.line(&format!("== {label}"));
-            let rx = system::run(job);
-            let mut outcome = Err("it stopped without saying why".to_string());
-            while let Ok(ev) = rx.recv().await {
-                match ev {
-                    Event::Line(l) => progress.line(&l),
-                    Event::Done(r) => {
-                        outcome = r;
-                        break;
-                    }
-                }
+        let p = progress.clone();
+        let result = run_stages(stages, system::run, move |r| match r {
+            Report::Stage(label) => {
+                p.stage.set_text(label);
+                p.line(&format!("== {label}"));
             }
-            match outcome {
-                Ok(summary) => progress.line(&summary),
-                Err(e) => {
-                    progress.line(&e);
-                    failed(&ui, &progress, label, &e);
-                    return;
-                }
-            }
+            Report::Line(l) => p.line(l),
+        })
+        .await;
+        if let Err((label, e)) = result {
+            progress.line(&e);
+            failed(&ui, &progress, label, &e);
+            return;
         }
         ui.busy.set(false);
         ui.refresh_installed(finish);
@@ -283,13 +328,8 @@ fn failed(ui: &Rc<Ui>, progress: &Rc<Progress>, stage: &str, error: &str) {
     retry.connect_clicked(move |_| {
         u.refresh_installed(move |ui| {
             let choices = ui.choices.borrow().clone();
-            let plan = ui.catalog.plan(&choices.selected, &ui.user, &ui.have.borrow());
-            match plan {
-                Ok(plan) => {
-                    let mut changes = system_changes(&choices);
-                    changes.extend(plan.changes.iter().cloned());
-                    run(ui, changes, plan, choices.update_after);
-                }
+            match remaining(&choices, &ui.catalog, &ui.user, &ui.have.borrow()) {
+                Ok((changes, plan)) => run(ui, changes, plan, choices.update_after),
                 Err(_) => ui.show(review),
             }
         })
@@ -337,6 +377,99 @@ fn finish(ui: &Rc<Ui>) {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::cell::RefCell;
+
+    fn job_name(j: &Job) -> String {
+        match j {
+            Job::Settings => "settings".into(),
+            Job::Apply(c) => format!("apply {}", c.len()),
+            Job::Update => "update".into(),
+            Job::ApplyAndUpdate(c) => format!("apply+update {}", c.len()),
+            Job::Flatpaks(a) => format!("flatpaks {}", a.join(",")),
+            Job::Profiles(p) => format!("profiles {}", p.len()),
+        }
+    }
+
+    /// A stand-in for the System Manager and the installers: records each job, and fails
+    /// the one whose name starts with `fail`.
+    fn fake(log: Rc<RefCell<Vec<String>>>, fail: &'static str) -> impl Fn(Job) -> async_channel::Receiver<Event> {
+        move |job| {
+            let name = job_name(&job);
+            log.borrow_mut().push(name.clone());
+            let (tx, rx) = async_channel::unbounded();
+            let _ = tx.send_blocking(Event::Line(format!("working on {name}")));
+            let done = if !fail.is_empty() && name.starts_with(fail) { Err(format!("{name} broke")) } else { Ok(format!("{name} done")) };
+            let _ = tx.send_blocking(Event::Done(done));
+            rx
+        }
+    }
+
+    fn plan(flatpaks: &[&str], profiles: &[&str]) -> Plan {
+        Plan {
+            flatpaks: flatpaks.iter().map(|s| s.to_string()).collect(),
+            profiles: profiles.iter().map(|s| s.to_string()).collect(),
+            ..Plan::default()
+        }
+    }
+
+    #[test]
+    fn stages_run_in_order_system_first() {
+        let changes = vec![Change::Hostname { value: Some("nyx".into()) }];
+        let names: Vec<String> = stages(changes.clone(), &plan(&["org.gimp.GIMP"], &["x#y"]), true).iter().map(|(_, j)| job_name(j)).collect();
+        assert_eq!(names, ["apply+update 1", "flatpaks org.gimp.GIMP", "profiles 1"]);
+        let names: Vec<String> = stages(Vec::new(), &plan(&[], &[]), true).iter().map(|(_, j)| job_name(j)).collect();
+        assert_eq!(names, ["update"], "only the update");
+        assert!(stages(Vec::new(), &plan(&[], &[]), false).is_empty(), "nothing to do");
+    }
+
+    #[test]
+    fn a_failed_stage_stops_the_rest_and_is_named() {
+        let log = Rc::new(RefCell::new(Vec::new()));
+        let lines = Rc::new(RefCell::new(Vec::new()));
+        let l = lines.clone();
+        let changes = vec![Change::Hostname { value: Some("nyx".into()) }];
+        let result = glib::MainContext::default().block_on(run_stages(
+            stages(changes, &plan(&["org.gimp.GIMP"], &["x#y"]), false),
+            fake(log.clone(), "flatpaks"),
+            move |r| {
+                if let Report::Line(t) = r {
+                    l.borrow_mut().push(t.to_string());
+                }
+            },
+        ));
+        assert_eq!(result, Err(("Installing from Flathub", "flatpaks org.gimp.GIMP broke".into())));
+        assert_eq!(*log.borrow(), ["apply 1", "flatpaks org.gimp.GIMP"], "the profile step never ran");
+        assert!(lines.borrow().contains(&"apply 1 done".to_string()));
+
+        let log = Rc::new(RefCell::new(Vec::new()));
+        let ok = glib::MainContext::default().block_on(run_stages(stages(Vec::new(), &plan(&["a"], &[]), false), fake(log, ""), |_| {}));
+        assert_eq!(ok, Ok(()));
+    }
+
+    #[test]
+    fn a_retry_skips_what_already_worked() {
+        let catalog = nyx_catalog::Catalog::builtin().unwrap();
+        let choices = Choices {
+            hostname: Some("nyx".into()),
+            selected: ["docker", "nyx-weather"].into_iter().map(String::from).collect(),
+            ..Default::default()
+        };
+        let before = nyx_catalog::Installed::default();
+        let (changes, first) = remaining(&choices, &catalog, "ken", &before).unwrap();
+        assert!(changes.iter().any(|c| matches!(c, Change::Service { name, .. } if name == "docker")));
+        assert!(!first.profiles.is_empty(), "Weather goes into the profile");
+
+        // The rebuild worked (Docker is in the system now); the profile step had failed.
+        let mut settings = nyx_system_proto::SystemSettings::default();
+        settings.packages.insert("docker-compose".into());
+        settings.services.insert("docker".into(), true);
+        settings.groups.insert("docker".into(), ["ken".to_string()].into_iter().collect());
+        let after = nyx_catalog::Installed { settings, ..Default::default() };
+        let (changes, retry) = remaining(&choices, &catalog, "ken", &after).unwrap();
+        assert!(!changes.iter().any(|c| matches!(c, Change::Service { .. } | Change::AddPackages { .. } | Change::GroupMember { .. })), "{changes:?}");
+        assert!(changes.contains(&Change::Hostname { value: Some("nyx".into()) }), "settings are stated again (no harm)");
+        assert_eq!(retry.profiles, first.profiles, "what failed is tried again");
+    }
 
     #[test]
     fn system_settings_become_changes() {
