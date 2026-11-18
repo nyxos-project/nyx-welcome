@@ -1,6 +1,7 @@
 //! The steps, in order, and what each page shows.
 
 mod basics;
+mod network;
 mod review;
 mod software;
 
@@ -14,6 +15,8 @@ pub use software::{basket, picked};
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Kind {
     Intro,
+    /// Wi-Fi: what installing software, accounts and the update need.
+    Network,
     Appearance,
     Computer,
     Presets,
@@ -49,6 +52,7 @@ const fn step(id: &'static str, title: &'static str, icon: &'static str, kind: K
 
 pub const STEPS: &[Step] = &[
     Step { optional: false, ..step("welcome", "Welcome", "starred-symbolic", Kind::Intro, 0) },
+    step("network", "Internet", "network-wireless-symbolic|network-workgroup-symbolic", Kind::Network, 0),
     step(
         "appearance",
         "Appearance",
@@ -81,6 +85,7 @@ pub fn find(catalog: &nyx_catalog::Catalog, id: &str) -> Option<(usize, Option<S
 pub fn build(ui: &Rc<Ui>, kind: Kind) -> gtk::Widget {
     match kind {
         Kind::Intro => basics::intro(ui),
+        Kind::Network => network::page(ui),
         Kind::Appearance => basics::appearance(ui),
         Kind::Computer => basics::computer(ui),
         Kind::Presets => software::presets(ui),
